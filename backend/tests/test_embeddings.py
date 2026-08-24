@@ -16,7 +16,7 @@ class FakeEmbedder:
     def available(self) -> bool:
         return True
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], *, task_type=None) -> list[list[float]]:
         return [[float(t.lower().count(w)) for w in self.VOCAB] for t in texts]
 
 
@@ -24,8 +24,20 @@ class UnavailableEmbedder:
     def available(self) -> bool:
         return False
 
-    def embed(self, texts):
+    def embed(self, texts, *, task_type=None):
         raise RuntimeError("should not be called")
+
+
+class RecordingEmbedder:
+    def __init__(self) -> None:
+        self.task_types: list[str | None] = []
+
+    def available(self) -> bool:
+        return True
+
+    def embed(self, texts, *, task_type=None):
+        self.task_types.append(task_type)
+        return [[1.0, 0.0] for _ in texts]
 
 
 def test_embedding_index_ranks_by_similarity():
@@ -69,6 +81,14 @@ def test_factory_falls_back_to_lexical_when_embedder_unavailable():
         embedder=UnavailableEmbedder(),
     )
     assert isinstance(r, LexicalIndex)
+
+
+def test_documents_and_query_use_distinct_task_types():
+    emb = RecordingEmbedder()
+    idx = EmbeddingIndex.build(make_files({"a.py": "x = 1\n"}), emb)
+    idx.search("what is x")
+    assert "RETRIEVAL_DOCUMENT" in emb.task_types  # build embeds documents
+    assert "RETRIEVAL_QUERY" in emb.task_types  # search embeds the query
 
 
 def test_embeddings_retriever_powers_chat_interface():

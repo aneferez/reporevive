@@ -21,7 +21,7 @@ import uuid
 from ..config import Settings
 from ..core.records import RepoFile
 from .base import SearchHit
-from .embeddings import Embedder, _chunk_files
+from .embeddings import DOCUMENT_TASK, QUERY_TASK, Embedder, _chunk_files
 from .lexical import _tokenize
 
 logger = logging.getLogger("reporevive.retrieval")
@@ -53,7 +53,7 @@ class PgVectorRetriever:
 
         chunks = list(_chunk_files(files, chunk_lines, overlap))
         namespace = uuid.uuid4().hex
-        vectors = embedder.embed([c[3] for c in chunks]) if chunks else []
+        vectors = embedder.embed([c[3] for c in chunks], task_type=DOCUMENT_TASK) if chunks else []
         dim = len(vectors[0]) if vectors else 0
 
         with psycopg.connect(settings.database_url) as conn:
@@ -94,7 +94,7 @@ class PgVectorRetriever:
         import psycopg
         from pgvector.psycopg import register_vector
 
-        q_vec = self._embedder.embed([query])[0]
+        q_vec = self._embedder.embed([query], task_type=QUERY_TASK)[0]
         with psycopg.connect(self._dsn) as conn:
             register_vector(conn)
             rows = conn.execute(

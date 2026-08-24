@@ -22,9 +22,15 @@ from .lexical import _tokenize  # reuse chunking-independent helper
 
 logger = logging.getLogger("reporevive.retrieval")
 
+# Asymmetric retrieval: indexed chunks and the query are embedded with different
+# task types so the model places a natural-language query near the documents
+# that answer it (Gemini embeddings guidance).
+DOCUMENT_TASK = "RETRIEVAL_DOCUMENT"
+QUERY_TASK = "RETRIEVAL_QUERY"
+
 
 class Embedder(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]: ...
+    def embed(self, texts: list[str], *, task_type: str | None = None) -> list[list[float]]: ...
 
 
 def _chunk_files(files: list[RepoFile], chunk_lines: int, overlap: int):
@@ -66,7 +72,7 @@ class EmbeddingIndex:
         if not chunks:
             return index
         texts = [c[3] for c in chunks]
-        vectors = embedder.embed(texts)
+        vectors = embedder.embed(texts, task_type=DOCUMENT_TASK)
         for (path, start, end, text), vec in zip(chunks, vectors):
             index._meta.append((path, start, end, text))
             index._vectors.append(vec)
@@ -82,7 +88,7 @@ class EmbeddingIndex:
             return []
         if not _tokenize(query):
             return []
-        q_vec = self._embedder.embed([query])[0]
+        q_vec = self._embedder.embed([query], task_type=QUERY_TASK)[0]
         q_norm = _norm(q_vec)
         if q_norm == 0:
             return []
@@ -113,13 +119,16 @@ class GeminiEmbedder:
             return False
         return True
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], *, task_type: str | None = None) -> list[list[float]]:
         from google import genai
+        from google.genai import types
 
         client = genai.Client(api_key=self.settings.gemini_api_key)
+        config = types.EmbedContentConfig(task_type=task_type) if task_type else None
         result = client.models.embed_content(
             model=self.settings.embedding_model,
             contents=texts,
+            config=config,
         )
         # SDK returns an object with `.embeddings`, each having `.values`.
         return [list(e.values) for e in result.embeddings]

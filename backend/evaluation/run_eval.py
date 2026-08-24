@@ -8,6 +8,13 @@ Run:  python -m evaluation.run_eval
 
 from __future__ import annotations
 
+import os
+
+# The benchmark measures deterministic analyzer/retrieval behavior. Force offline
+# mode so a local .env with a real key doesn't make it hit the network or vary
+# results run-to-run. Must run before app modules read settings.
+os.environ["GEMINI_API_KEY"] = ""
+
 import json
 from dataclasses import dataclass, field
 from http import HTTPStatus
