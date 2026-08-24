@@ -59,3 +59,26 @@ def test_no_backend_routes_means_no_comparison():
     ctx = make_ctx({"frontend/jobs.ts": 'fetch("/api/jobs/search");\n'})
     result = analyze_api_contract(ctx)
     assert result.findings == []
+
+
+def test_adjacent_fetch_calls_do_not_bleed_method():
+    # A plain GET fetch on one line must not pick up the `method: "POST"` of a
+    # different fetch call on a nearby line (regression).
+    ctx = make_ctx(
+        {
+            "backend/main.py": (
+                "from fastapi import FastAPI\napp = FastAPI()\n"
+                '@app.get("/api/health")\ndef health(): return {}\n'
+                '@app.get("/api/jobs")\ndef jobs(): return []\n'
+            ),
+            "frontend/api.ts": (
+                'export const getHealth = () => fetch("/api/health");\n'
+                'export const search = () => fetch("/api/jobs/search", { method: "POST" });\n'
+            ),
+        }
+    )
+    result = analyze_api_contract(ctx)
+    titles = [f.title for f in result.findings]
+    assert not any("different HTTP method" in t for t in titles), titles
+    assert any("no matching backend route" in t for t in titles)
+    assert len(result.findings) == 1

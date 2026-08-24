@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     # Optional: when unset the backend runs in deterministic-only mode and the
     # AI layer degrades gracefully instead of failing.
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.0-flash"
-    embedding_model: str = "text-embedding-004"
+    gemini_model: str = "gemini-3.6-flash"
+    embedding_model: str = "gemini-embedding-001"
     ai_request_timeout_s: float = 30.0
 
     # Retrieval backend: lexical (default) | embeddings | pgvector | auto.

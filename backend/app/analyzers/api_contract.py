@@ -198,13 +198,14 @@ def _extract_frontend_calls(ctx: AnalysisContext) -> list[FrontendCall]:
             continue
         lines = f.content.splitlines()
         for line_no, line in enumerate(lines, start=1):
-            window = " ".join(lines[line_no - 1 : line_no + 2])  # this + next 2 lines
-
             for m in _FETCH.finditer(line):
                 path = _normalize_path(m.group(1))
                 if path is None:
                     continue
-                method_match = _METHOD_OPT.search(window)
+                # Scope method detection to THIS fetch(...) call only, so an
+                # options object from a nearby call can't bleed in.
+                region = _fetch_call_region(lines, line_no - 1, m.start())
+                method_match = _METHOD_OPT.search(region)
                 method = (method_match.group(1).upper() if method_match else "GET")
                 calls.append(FrontendCall(method, path, f.path, line_no, m.group(0)[:80]))
 
@@ -217,6 +218,31 @@ def _extract_frontend_calls(ctx: AnalysisContext) -> list[FrontendCall]:
                     continue
                 calls.append(FrontendCall(method, path, f.path, line_no, m.group(0)[:80]))
     return calls
+
+
+def _fetch_call_region(lines: list[str], idx: int, col: int) -> str:
+    """Text of a single ``fetch(...)`` call, from its ``(`` to the matching ``)``.
+
+    Bounded to a few lines so a multi-line options object is included but the
+    next statement/call is not.
+    """
+
+    text = "\n".join(lines[idx : idx + 5])
+    sub = text[col:]
+    open_pos = sub.find("(")
+    if open_pos == -1:
+        return lines[idx]
+    depth = 0
+    out: list[str] = []
+    for ch in sub[open_pos:]:
+        out.append(ch)
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                break
+    return "".join(out)
 
 
 def _flask_methods(rest: str) -> tuple[str, ...]:

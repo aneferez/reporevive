@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import os
+
+# Force deterministic, offline behavior in tests regardless of any local .env:
+# an OS env var overrides the .env file in pydantic-settings. Must run before
+# app modules read settings (app.main builds the app at import time).
+os.environ["GEMINI_API_KEY"] = ""
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.ratelimit import reset_limiter
+from app.config import get_settings
 from app.core.store import reset_store
 from app.main import create_app
 
 from .helpers import make_tar_gz
+
+get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)
