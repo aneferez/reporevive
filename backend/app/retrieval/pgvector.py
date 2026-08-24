@@ -12,9 +12,9 @@ If any dependency or the database is unavailable, ``build_retriever`` catches th
 error and falls back to lexical retrieval, so this path never breaks analysis.
 
 Production notes (single-instance MVP scope):
-- Rows are namespaced per analysis; deleting an analysis does not currently purge
-  its rows. For a long-running deployment, add a cleanup on deletion and an
-  approximate vector index (HNSW/IVFFlat) on ``embedding`` for large corpora.
+- Rows are namespaced per analysis; the store's ``on_remove`` hook calls
+  ``cleanup()`` to purge a departing analysis's rows. For large corpora add an
+  approximate vector index (HNSW/IVFFlat) on ``embedding``.
 - The table's vector dimension is fixed on first creation from the configured
   embedding model; changing ``EMBEDDING_MODEL`` to one with a different dimension
   requires a fresh table.
@@ -33,15 +33,23 @@ from .lexical import _tokenize
 
 logger = logging.getLogger("reporevive.retrieval")
 
-_TABLE = "reporevive_chunks"
+DEFAULT_TABLE = "reporevive_chunks"
 
 
 class PgVectorRetriever:
-    def __init__(self, dsn: str, namespace: str, embedder: Embedder, count: int) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        namespace: str,
+        embedder: Embedder,
+        count: int,
+        table: str = DEFAULT_TABLE,
+    ) -> None:
         self._dsn = dsn
         self._namespace = namespace
         self._embedder = embedder
         self._count = count
+        self._table = table
 
     @classmethod
     def build(
@@ -52,6 +60,7 @@ class PgVectorRetriever:
         *,
         chunk_lines: int = 40,
         overlap: int = 10,
+        table: str = DEFAULT_TABLE,
     ) -> "PgVectorRetriever":
         if not settings.database_url:
             raise RuntimeError("RETRIEVAL_MODE=pgvector requires DATABASE_URL")
@@ -60,7 +69,7 @@ class PgVectorRetriever:
         chunks = list(_chunk_files(files, chunk_lines, overlap))
         if not chunks:
             # Nothing to index; don't touch the database.
-            return cls(settings.database_url, namespace, embedder, 0)
+            return cls(settings.database_url, namespace, embedder, 0, table)
 
         import psycopg
         from pgvector.psycopg import register_vector
@@ -72,7 +81,7 @@ class PgVectorRetriever:
             conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             register_vector(conn)
             conn.execute(
-                f"CREATE TABLE IF NOT EXISTS {_TABLE} ("
+                f"CREATE TABLE IF NOT EXISTS {table} ("
                 "  id bigserial PRIMARY KEY,"
                 "  namespace text NOT NULL,"
                 "  file text NOT NULL,"
@@ -83,19 +92,19 @@ class PgVectorRetriever:
                 ")"
             )
             conn.execute(
-                f"CREATE INDEX IF NOT EXISTS {_TABLE}_namespace_idx ON {_TABLE} (namespace)"
+                f"CREATE INDEX IF NOT EXISTS {table}_namespace_idx ON {table} (namespace)"
             )
             with conn.cursor() as cur:
                 for (path, start, end, text), vec in zip(chunks, vectors):
                     cur.execute(
-                        f"INSERT INTO {_TABLE} "
+                        f"INSERT INTO {table} "
                         "(namespace, file, start_line, end_line, content, embedding) "
                         "VALUES (%s, %s, %s, %s, %s, %s)",
                         (namespace, path, start, end, text, vec),
                     )
             conn.commit()
 
-        return cls(settings.database_url, namespace, embedder, len(chunks))
+        return cls(settings.database_url, namespace, embedder, len(chunks), table)
 
     @property
     def size(self) -> int:
@@ -113,7 +122,7 @@ class PgVectorRetriever:
             rows = conn.execute(
                 f"SELECT file, start_line, end_line, content, "
                 "1 - (embedding <=> %s) AS score "
-                f"FROM {_TABLE} WHERE namespace = %s "
+                f"FROM {self._table} WHERE namespace = %s "
                 "ORDER BY embedding <=> %s LIMIT %s",
                 (q_vec, self._namespace, q_vec, k),
             ).fetchall()
@@ -124,12 +133,14 @@ class PgVectorRetriever:
         ]
 
     def cleanup(self) -> None:
-        """Delete this analysis's rows from the shared table (retention)."""
+        """Delete this analysis's rows from the table (retention)."""
 
         if self._count == 0:
             return
         import psycopg
 
         with psycopg.connect(self._dsn) as conn:
-            conn.execute(f"DELETE FROM {_TABLE} WHERE namespace = %s", (self._namespace,))
+            conn.execute(
+                f"DELETE FROM {self._table} WHERE namespace = %s", (self._namespace,)
+            )
             conn.commit()
