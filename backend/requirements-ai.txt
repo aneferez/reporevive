@@ -3,3 +3,7 @@
 # The backend runs without this; the AI layer degrades gracefully when the
 # package or GEMINI_API_KEY is absent.
 google-genai>=0.3
+
+# Optional: only needed for RETRIEVAL_MODE=pgvector (Postgres + pgvector).
+# psycopg[binary]>=3.1
+# pgvector>=0.2

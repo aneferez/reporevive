@@ -29,6 +29,12 @@ _FASTAPI_DECORATOR = re.compile(
 _EXPRESS_ROUTE = re.compile(
     r"\.(get|post|put|delete|patch|all)\(\s*['\"`]([^'\"`]+)['\"`]"
 )
+# Flask: @app.route("/path", methods=[...]) — methods optional (defaults GET).
+_FLASK_ROUTE = re.compile(r"\.route\(\s*['\"]([^'\"]+)['\"](?P<rest>[^)]*)\)")
+_FLASK_METHODS = re.compile(r"methods\s*=\s*\[([^\]]*)\]")
+_FLASK_URL_PREFIX = re.compile(r"url_prefix\s*=\s*['\"]([^'\"]+)['\"]")
+# Django: path("route/", view) / re_path(r"^route/$", view) in a urlconf.
+_DJANGO_PATH = re.compile(r"\b(?:re_path|path)\(\s*r?['\"]([^'\"]+)['\"]")
 _PREFIX = re.compile(r"prefix\s*=\s*['\"]([^'\"]+)['\"]")
 _EXPRESS_MOUNT = re.compile(r"\.use\(\s*['\"]([^'\"]+)['\"]")
 # A JS/TS file is only treated as an Express backend (routes, not client calls)
@@ -133,22 +139,33 @@ def analyze_api_contract(ctx: AnalysisContext) -> ApiResult:
 def _extract_backend_routes(ctx: AnalysisContext) -> list[BackendRoute]:
     routes: list[BackendRoute] = []
 
-    # FastAPI (Python): decorator lines only.
+    # FastAPI + Flask (Python): decorator lines only.
     py_files = ctx.find_by_language("python")
-    prefixes = _collect_prefixes(py_files, _PREFIX)
+    prefixes = _collect_prefixes(py_files, _PREFIX) + _collect_prefixes(py_files, _FLASK_URL_PREFIX)
+    prefixes = sorted(set(prefixes))
     for f in py_files:
         for line_no, line in enumerate(f.content.splitlines(), start=1):
             stripped = line.lstrip()
             if not stripped.startswith("@"):
                 continue
-            m = _FASTAPI_DECORATOR.search(stripped)
-            if not m:
+            fastapi_m = _FASTAPI_DECORATOR.search(stripped)
+            if fastapi_m:
+                method, raw_path = fastapi_m.group(1).upper(), fastapi_m.group(2)
+                if raw_path.startswith("/"):
+                    for variant in _path_variants(raw_path, prefixes):
+                        routes.append(BackendRoute(method, variant, f.path, line_no))
                 continue
-            method, raw_path = m.group(1).upper(), m.group(2)
-            if not raw_path.startswith("/"):
-                continue
-            for variant in _path_variants(raw_path, prefixes):
-                routes.append(BackendRoute(method, variant, f.path, line_no))
+            flask_m = _FLASK_ROUTE.search(stripped)
+            if flask_m:
+                raw_path = flask_m.group(1)
+                if not raw_path.startswith("/"):
+                    continue
+                methods = _flask_methods(flask_m.group("rest"))
+                for meth in methods:
+                    for variant in _path_variants(raw_path, prefixes):
+                        routes.append(BackendRoute(meth, variant, f.path, line_no))
+
+    routes.extend(_extract_django_routes(ctx))
 
     # Express (JS/TS) — only files that actually import express.
     js_files = [
@@ -200,6 +217,51 @@ def _extract_frontend_calls(ctx: AnalysisContext) -> list[FrontendCall]:
                     continue
                 calls.append(FrontendCall(method, path, f.path, line_no, m.group(0)[:80]))
     return calls
+
+
+def _flask_methods(rest: str) -> tuple[str, ...]:
+    m = _FLASK_METHODS.search(rest or "")
+    if not m:
+        return ("GET",)
+    names = re.findall(r"['\"](\w+)['\"]", m.group(1))
+    return tuple(n.upper() for n in names) or ("GET",)
+
+
+def _extract_django_routes(ctx: AnalysisContext) -> list[BackendRoute]:
+    django_used = bool(ctx.python_dependencies() & {"django"}) or bool(
+        ctx.search(r"^\s*(from|import)\s+django", languages=("python",), limit=1)
+    )
+    if not django_used:
+        return []
+
+    routes: list[BackendRoute] = []
+    for f in ctx.find_by_language("python"):
+        if "urlpatterns" not in f.content and not f.path.lower().endswith("urls.py"):
+            continue
+        for line_no, line in enumerate(f.content.splitlines(), start=1):
+            if "include(" in line:  # nested urlconf prefix, not a leaf route
+                continue
+            m = _DJANGO_PATH.search(line)
+            if not m:
+                continue
+            norm = _django_normalize(m.group(1))
+            if not norm:
+                continue
+            # Django routing is method-agnostic at the URL layer; register all
+            # methods so only genuine missing-route mismatches are reported.
+            for meth in _METHODS:
+                routes.append(BackendRoute(meth.upper(), norm, f.path, line_no))
+    return routes
+
+
+def _django_normalize(raw: str) -> str | None:
+    raw = raw.strip().lstrip("^").rstrip("$")
+    raw = re.sub(r"<[^>]+>", "*", raw)  # <int:id> path converters
+    raw = re.sub(r"\(\?P<[^>]+>[^)]*\)", "*", raw)  # named regex groups
+    raw = re.sub(r"\([^)]*\)", "*", raw)  # other regex groups
+    if not raw.startswith("/"):
+        raw = "/" + raw
+    return _normalize_path(raw)
 
 
 def _collect_prefixes(files, pattern: re.Pattern[str]) -> list[str]:

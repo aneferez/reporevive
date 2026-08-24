@@ -115,6 +115,14 @@ def evaluate() -> EvalReport:
     r.append(ScenarioResult("bare-missing-tests", "findings", "Missing tests", _has_finding(bare, category="testing")))
     r.append(ScenarioResult("bare-missing-deploy", "findings", "Missing deployment config", _has_finding(bare, category="deployment")))
 
+    flask = records["flask_mismatch"]
+    r.append(ScenarioResult("flask-stack", "stack", "Detect Flask backend", _stack_has(flask, "backend", "Flask")))
+    r.append(ScenarioResult("flask-method", "findings", "Flask wrong HTTP method", _has_finding(flask, title_sub="different HTTP method")))
+    r.append(ScenarioResult("flask-missing", "findings", "Flask missing route", _has_finding(flask, title_sub="no matching backend route")))
+
+    conflict = records["version_conflict"]
+    r.append(ScenarioResult("dep-version-conflict", "findings", "Conflicting dependency versions", _has_finding(conflict, title_sub="Conflicting versions")))
+
     # --- Intake safety scenarios ------------------------------------------
     r.append(ScenarioResult("intake-bad-url", "intake", "Reject unsupported repo URL", _expect_apperror(lambda: parse_github_url("https://gitlab.com/a/b"), "INVALID_REPOSITORY_URL")))
     r.append(ScenarioResult("intake-oversize", "intake", "Reject oversized archive", _expect_pipeline_error(lambda: extract_zip(zip_bytes({"a.txt": "x" * 100}), Settings(max_extracted_bytes=10)), "ARCHIVE_TOO_LARGE")))

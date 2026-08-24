@@ -49,6 +49,7 @@ TEXT_EXTENSIONS = {
     ".sql",
     ".vue", ".svelte", ".astro",
     ".graphql", ".gql",
+    ".prisma",
     ".xml",
     ".env",
 }

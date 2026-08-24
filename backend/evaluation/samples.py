@@ -133,10 +133,47 @@ REPO_BARE = {
     "src/index.js": "console.log('hello');\n",
 }
 
+# ---------------------------------------------------------------------------
+# 6. Flask backend with method mismatch + missing route.
+# ---------------------------------------------------------------------------
+REPO_FLASK = {
+    "frontend/package.json": '{"dependencies":{"react":"^18","react-dom":"^18"},"devDependencies":{"vite":"^5"}}',
+    "frontend/src/api.ts": (
+        'export const addTask = () => fetch("/api/tasks", { method: "POST" });\n'
+        'export const missing = () => fetch("/api/reports");\n'
+        'export const login = () => fetch("/api/login", { method: "POST" });\n'
+    ),
+    "backend/requirements.txt": "flask\n",
+    "backend/app.py": (
+        "from flask import Flask\n"
+        "app = Flask(__name__)\n\n"
+        '@app.route("/api/tasks", methods=["GET"])\n'
+        "def tasks():\n    return []\n\n"
+        '@app.route("/api/login", methods=["POST"])\n'
+        "def login():\n    return {}\n"
+    ),
+    "README.md": _LONG_README,
+    "backend/tests/test_tasks.py": "def test_tasks():\n    assert True\n",
+    "Dockerfile": "FROM python:3.12-slim\n",
+}
+
+# ---------------------------------------------------------------------------
+# 7. Monorepo with conflicting dependency versions.
+# ---------------------------------------------------------------------------
+REPO_VERSION_CONFLICT = {
+    "web/package.json": '{"dependencies":{"react":"^18.2.0"}}',
+    "admin/package.json": '{"dependencies":{"react":"^17.0.2"}}',
+    "README.md": _LONG_README,
+    "web/tests/app.test.tsx": "test('x', () => {});\n",
+    "Dockerfile": "FROM node:20\n",
+}
+
 SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "healthy_react_fastapi": REPO_HEALTHY,
     "broken_config": REPO_BROKEN_CONFIG,
     "exposed_secrets": REPO_SECRETS,
     "api_mismatch": REPO_API_MISMATCH,
     "bare_broken": REPO_BARE,
+    "flask_mismatch": REPO_FLASK,
+    "version_conflict": REPO_VERSION_CONFLICT,
 }

@@ -36,9 +36,10 @@ frontend/    React + Vite frontend (separate owner) — not part of this backend
 - **Deterministic analyzers** — stack detection, architecture graph, configuration
   inspection, API-contract comparison (frontend calls vs backend routes), masked
   secret detection, and tests/docs assessment. Every finding cites its evidence.
-- **Retrieval + AI** — lexical BM25 retrieval powers grounded, cited chat; an
-  optional, configurable Gemini layer adds narration and degrades gracefully when
-  no key is set.
+- **Retrieval + AI** — pluggable retrieval behind one interface: lexical BM25
+  (default, offline), in-memory Gemini embeddings, or pgvector (Postgres;
+  experimental). All power grounded, cited chat; the optional Gemini layer also
+  adds narration and degrades gracefully when no key is set.
 - **Safety** — no code execution, GitHub-only fetching, redaction before storage/
   logging/AI/response, structured errors, and explicit uncertainty on findings.
 

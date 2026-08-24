@@ -14,6 +14,9 @@ import re
 from dataclasses import dataclass
 
 from ..core.records import RepoFile
+from .base import SearchHit  # re-exported for backward compatibility
+
+__all__ = ["LexicalIndex", "SearchHit", "Chunk"]
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
@@ -38,20 +41,6 @@ class Chunk:
     text: str
     tokens: list[str]
     length: int
-
-
-@dataclass
-class SearchHit:
-    file: str
-    start_line: int
-    end_line: int
-    text: str
-    score: float
-
-    def excerpt(self, max_lines: int = 3, max_chars: int = 240) -> str:
-        lines = [ln for ln in self.text.splitlines() if ln.strip()]
-        snippet = "\n".join(lines[:max_lines])
-        return snippet[:max_chars]
 
 
 class LexicalIndex:

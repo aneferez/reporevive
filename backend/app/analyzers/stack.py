@@ -7,6 +7,7 @@ files so the architecture view and findings can cite them.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from ..models.enums import Category, Severity, VerificationStatus
@@ -75,6 +76,14 @@ def detect_stack(ctx: AnalysisContext) -> StackResult:
     if has_npm("@angular/core"):
         frontend.append("Angular")
         result.flags["angular"] = True
+    if has_npm("nuxt"):
+        frontend.append("Nuxt")
+    if has_npm("@remix-run/react", "@remix-run/node"):
+        frontend.append("Remix")
+    if has_npm("solid-js"):
+        frontend.append("SolidJS")
+    if has_npm("astro") or ctx.find_by_suffix(".astro"):
+        frontend.append("Astro")
     if has_npm("tailwindcss"):
         frontend.append("Tailwind CSS")
 
@@ -180,6 +189,24 @@ def detect_stack(ctx: AnalysisContext) -> StackResult:
     for hit_file, _line, text in ctx.search(r"(?i)DATABASE_URL\s*[=:].*postgres", limit=1):
         add_db("PostgreSQL", [hit_file.path])
 
+    # Prisma (maps to its configured provider when the schema is available).
+    if has_npm("@prisma/client", "prisma"):
+        result.flags["prisma"] = True
+        provider = _prisma_provider(ctx)
+        schema_paths = [f.path for f in ctx.find_by_name("schema.prisma")]
+        if provider:
+            add_db(provider, schema_paths or pkg_paths)
+        else:
+            add_db("SQL (Prisma)", schema_paths or pkg_paths)
+
+    # SQLAlchemy without a more specific dialect already found.
+    if "sqlalchemy" in py and not any(d in database for d in ("PostgreSQL", "MySQL", "SQLite")):
+        add_db("SQL (SQLAlchemy)", req_paths)
+
+    # Firebase / Firestore.
+    if has_npm("firebase", "firebase-admin") or "firebase-admin" in py:
+        add_db("Firebase", pkg_paths + req_paths)
+
     result.stack = StackInfo(
         frontend=_dedupe(frontend),
         backend=_dedupe(backend),
@@ -191,7 +218,94 @@ def detect_stack(ctx: AnalysisContext) -> StackResult:
     result.database_evidence = sorted(db_evidence)
 
     result.findings.extend(_dependency_findings(ctx))
+    result.findings.extend(_version_conflict_findings(ctx))
     return result
+
+
+def _prisma_provider(ctx: AnalysisContext) -> str | None:
+    mapping = {
+        "postgresql": "PostgreSQL",
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL",
+        "sqlite": "SQLite",
+        "mongodb": "MongoDB",
+        "sqlserver": "SQL Server",
+    }
+    for f in ctx.find_by_name("schema.prisma"):
+        m = re.search(r"provider\s*=\s*['\"]([a-zA-Z]+)['\"]", f.content)
+        if m and m.group(1).lower() in mapping:
+            return mapping[m.group(1).lower()]
+    return None
+
+
+def _first_major(spec: str) -> str | None:
+    m = re.search(r"(\d+)", spec)
+    return m.group(1) if m else None
+
+
+def _version_conflict_findings(ctx: AnalysisContext) -> list[Finding]:
+    findings: list[Finding] = []
+
+    # npm: same package declared with conflicting MAJOR versions across manifests.
+    npm_versions: dict[str, set[tuple[str, str]]] = {}  # pkg -> {(major, path)}
+    for path, data in ctx.package_jsons():
+        for section in ("dependencies", "devDependencies"):
+            deps = data.get(section, {})
+            if not isinstance(deps, dict):
+                continue
+            for pkg, spec in deps.items():
+                major = _first_major(str(spec))
+                if major:
+                    npm_versions.setdefault(pkg, set()).add((major, path))
+
+    for pkg, entries in npm_versions.items():
+        majors = {major for major, _ in entries}
+        if len(majors) > 1:
+            detail = ", ".join(sorted(f"{major}.x in {path}" for major, path in entries))
+            findings.append(
+                make_finding(
+                    severity=Severity.medium,
+                    category=Category.dependency,
+                    title=f"Conflicting versions of '{pkg}'",
+                    description=f"'{pkg}' is declared with incompatible major versions "
+                    "across package manifests, which can cause install or runtime errors.",
+                    recommendation=f"Align '{pkg}' to a single compatible version.",
+                    file=sorted(path for _, path in entries)[0],
+                    evidence=detail,
+                    confidence=0.8,
+                    verification_status=VerificationStatus.evidence_backed,
+                )
+            )
+
+    # Python: same package pinned to different exact versions across requirements.
+    py_pins: dict[str, set[str]] = {}
+    for f in ctx.find_by_name("requirements.txt") + ctx.find_by_name("requirements-dev.txt"):
+        for line in f.content.splitlines():
+            line = line.strip()
+            if "==" in line and not line.startswith("#"):
+                name, _, ver = line.partition("==")
+                name = name.strip().lower()
+                ver = ver.split(";")[0].strip()
+                if name and ver:
+                    py_pins.setdefault(name, set()).add(ver)
+
+    for pkg, versions in py_pins.items():
+        if len(versions) > 1:
+            findings.append(
+                make_finding(
+                    severity=Severity.medium,
+                    category=Category.dependency,
+                    title=f"Conflicting pinned versions of '{pkg}'",
+                    description=f"'{pkg}' is pinned to different versions across "
+                    "requirements files.",
+                    recommendation=f"Pin '{pkg}' to a single version.",
+                    evidence=f"{pkg}: {', '.join(sorted(versions))}",
+                    confidence=0.85,
+                    verification_status=VerificationStatus.evidence_backed,
+                )
+            )
+
+    return findings
 
 
 def _dependency_findings(ctx: AnalysisContext) -> list[Finding]:

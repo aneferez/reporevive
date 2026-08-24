@@ -120,6 +120,8 @@ Set `FRONTEND_ORIGIN` to the deployed frontend origin(s) so CORS allows it.
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | Comma-separated CORS allowlist. |
 | `GEMINI_API_KEY` | _(empty)_ | Server-side Gemini key. Empty → deterministic-only. |
 | `GEMINI_MODEL` | `gemini-2.0-flash` | Configurable model id. |
+| `EMBEDDING_MODEL` | `text-embedding-004` | Embedding model for embeddings retrieval. |
+| `RETRIEVAL_MODE` | `lexical` | `lexical` \| `embeddings` \| `pgvector` \| `auto`. |
 | `GITHUB_TOKEN` | _(empty)_ | Optional; public repos only, raises rate limit. |
 | `DATABASE_URL` | _(empty)_ | Optional persistence (Supabase/Postgres). |
 | `MAX_ARCHIVE_BYTES` | `10485760` | Max compressed upload (10 MB). |

@@ -31,7 +31,13 @@ class Settings(BaseSettings):
     # AI layer degrades gracefully instead of failing.
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
+    embedding_model: str = "text-embedding-004"
     ai_request_timeout_s: float = 30.0
+
+    # Retrieval backend: lexical (default) | embeddings | pgvector | auto.
+    # embeddings/pgvector require a configured AI key; they fall back to lexical
+    # when the embedder is unavailable.
+    retrieval_mode: str = "lexical"
 
     # --- GitHub intake ----------------------------------------------------
     # Optional, public-repos only. Purely raises the unauthenticated rate limit

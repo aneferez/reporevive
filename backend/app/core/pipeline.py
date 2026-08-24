@@ -154,9 +154,9 @@ def _run_stages(record: AnalysisRecord, settings: Settings) -> None:
 
 def _build_retrieval_and_narration(record: AnalysisRecord, settings: Settings) -> None:
     try:
-        from ..retrieval.lexical import LexicalIndex
+        from ..retrieval.factory import build_retriever
 
-        record.retrieval_index = LexicalIndex.build(record.files)
+        record.retrieval_index = build_retriever(record.files, settings)
     except Exception as exc:  # noqa: BLE001 - retrieval is best-effort
         logger.warning("Retrieval index build failed for %s: %s", record.analysis_id, exc)
 
