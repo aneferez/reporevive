@@ -587,6 +587,125 @@ Response uses the same analysis-start shape with `source_type` set to `zip`.
 }
 ```
 
+### Complete report response
+
+`GET /api/analysis/{analysis_id}/report` returns a single flat bundle. The nested
+`architecture`, `findings`, and `roadmap` objects use the exact shapes defined in
+their own endpoint sections above.
+
+```json
+{
+  "analysis_id": "analysis_001",
+  "status": "completed",
+  "repository": {
+    "name": "example-project",
+    "source_type": "github",
+    "url": "https://github.com/example/example-project"
+  },
+  "overview": "Inspected 82 source file(s). Detected React, Vite, TypeScript frontend; FastAPI, Python backend; PostgreSQL storage. Found 6 finding(s): 0 critical, 2 high, 3 medium, 1 low. Most severe: Frontend endpoint has no matching backend route.",
+  "readiness_label": "needs_attention",
+  "stack": {
+    "frontend": ["React", "Vite", "TypeScript"],
+    "backend": ["FastAPI", "Python"],
+    "database": ["PostgreSQL"],
+    "testing": ["Pytest", "Vitest"]
+  },
+  "summary": {
+    "files_analyzed": 82,
+    "analysis_duration_ms": 6840,
+    "findings_by_severity": {
+      "critical": 0,
+      "high": 2,
+      "medium": 3,
+      "low": 1
+    },
+    "readiness_label": "needs_attention"
+  },
+  "architecture": {
+    "components": [
+      {
+        "id": "frontend",
+        "type": "frontend",
+        "label": "React + Vite",
+        "evidence_files": ["frontend/package.json"]
+      },
+      {
+        "id": "backend",
+        "type": "backend",
+        "label": "FastAPI",
+        "evidence_files": ["backend/app/main.py"]
+      },
+      {
+        "id": "database",
+        "type": "persistence",
+        "label": "PostgreSQL",
+        "evidence_files": ["backend/requirements.txt"]
+      }
+    ],
+    "connections": [
+      {
+        "source": "frontend",
+        "target": "backend",
+        "label": "HTTP API",
+        "evidence_files": []
+      },
+      {
+        "source": "backend",
+        "target": "database",
+        "label": "Database connection",
+        "evidence_files": ["backend/requirements.txt"]
+      }
+    ]
+  },
+  "findings": {
+    "items": [
+      {
+        "id": "finding_001",
+        "severity": "high",
+        "category": "api_mismatch",
+        "title": "Frontend endpoint has no matching backend route",
+        "description": "A frontend request references a route that was not found in the supported backend route map.",
+        "file": "frontend/src/services/jobs.ts",
+        "line": 24,
+        "evidence": "POST /api/jobs/search",
+        "confidence": 0.75,
+        "recommendation": "Implement the matching backend route or update the frontend to call an existing endpoint.",
+        "verification_status": "evidence_backed"
+      }
+    ],
+    "total": 6
+  },
+  "roadmap": {
+    "items": [
+      {
+        "id": "task_001",
+        "priority": "high",
+        "title": "Resolve API contract mismatches",
+        "description": "Align frontend calls with backend routes so core features work end to end. (2 related finding(s)).",
+        "related_finding_ids": ["finding_001"],
+        "related_files": ["frontend/src/services/jobs.ts"],
+        "estimated_complexity": "medium"
+      }
+    ]
+  },
+  "limitations": [
+    "Repository contents are inspected, not executed.",
+    "Findings are advisory and may include false positives or missed issues.",
+    "Only supported languages and configuration formats are analyzed.",
+    "Readiness is a heuristic label, not a formal security assessment."
+  ],
+  "generated_at": "2026-08-24T12:00:09Z"
+}
+```
+
+Notes:
+
+- `architecture.components[].type` is one of `frontend`, `backend`, `persistence`,
+  `external_service`, `deployment`, or `unknown` (PRD section 9 taxonomy).
+- `roadmap.items[].estimated_complexity` is one of `low`, `medium`, `high`.
+- `finding.category` is one of `stack`, `configuration`, `api_mismatch`, `secret`,
+  `testing`, `documentation`, `dependency`, `deployment`, or `architecture`.
+
 ### Standard error response
 
 ```json
