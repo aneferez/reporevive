@@ -1,0 +1,5 @@
+# Optional AI provider dependency (Gemini).
+# Install with:  pip install -r requirements-ai.txt
+# The backend runs without this; the AI layer degrades gracefully when the
+# package or GEMINI_API_KEY is absent.
+google-genai>=0.3

@@ -1,0 +1,9 @@
+# RepoRevive backend — core runtime dependencies.
+# AI provider deps are optional and live in requirements-ai.txt so the base
+# install stays lean and the app runs in deterministic-only mode without a key.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+pydantic>=2.9,<3.0
+pydantic-settings>=2.5
+python-multipart>=0.0.9
+httpx>=0.27
