@@ -54,7 +54,9 @@ def build_architecture(
         components.append(
             ArchitectureComponent(
                 id="database",
-                type="database",
+                # PRD section 9 taxonomy uses "persistence" (matches the frontend);
+                # the node id stays "database" so connection targets still resolve.
+                type="persistence",
                 label=" + ".join(stack.stack.database[:3]),
                 evidence_files=stack.database_evidence[:5],
             )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.analyzers.api_contract import analyze_api_contract
+from app.analyzers.architecture import build_architecture
 from app.analyzers.stack import detect_stack
 
 from .helpers import make_ctx
@@ -102,6 +103,25 @@ def test_npm_version_conflict_flagged():
     )
     result = detect_stack(ctx)
     assert any("Conflicting versions of 'react'" in f.title for f in result.findings)
+
+
+def test_database_component_uses_persistence_type():
+    # Matches the PRD section 9 architecture taxonomy and the frontend's icons.
+    ctx = make_ctx(
+        {
+            "backend/requirements.txt": "fastapi\npsycopg2-binary\n",
+            "backend/main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "frontend/package.json": '{"dependencies":{"react":"18"}}',
+        }
+    )
+    stack = detect_stack(ctx)
+    api = analyze_api_contract(ctx)
+    arch = build_architecture(stack, api, ctx)
+    db = next((c for c in arch.components if c.id == "database"), None)
+    assert db is not None
+    assert db.type == "persistence"
+    # The connection target still resolves to the component id.
+    assert any(c.target == "database" for c in arch.connections)
 
 
 def test_python_pin_conflict_flagged():
