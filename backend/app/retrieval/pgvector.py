@@ -1,16 +1,23 @@
-"""Postgres + pgvector retriever (experimental).
+"""Postgres + pgvector retriever (opt-in via RETRIEVAL_MODE=pgvector).
 
 Persists chunk embeddings in a pgvector table and queries by cosine distance,
 behind the same ``search`` interface as the other retrievers.
 
-Status: this path is implemented but NOT exercised by the MVP test suite, which
-runs without a database. It requires ``DATABASE_URL`` pointing at a Postgres with
-the ``vector`` extension, plus the optional dependencies::
+Requires ``DATABASE_URL`` pointing at a Postgres with the ``vector`` extension,
+plus the optional dependencies::
 
     pip install "psycopg[binary]" pgvector
 
-Enable via ``RETRIEVAL_MODE=pgvector``. If any dependency or the database is
-unavailable, the factory falls back to lexical retrieval.
+If any dependency or the database is unavailable, ``build_retriever`` catches the
+error and falls back to lexical retrieval, so this path never breaks analysis.
+
+Production notes (single-instance MVP scope):
+- Rows are namespaced per analysis; deleting an analysis does not currently purge
+  its rows. For a long-running deployment, add a cleanup on deletion and an
+  approximate vector index (HNSW/IVFFlat) on ``embedding`` for large corpora.
+- The table's vector dimension is fixed on first creation from the configured
+  embedding model; changing ``EMBEDDING_MODEL`` to one with a different dimension
+  requires a fresh table.
 """
 
 from __future__ import annotations
@@ -26,14 +33,15 @@ from .lexical import _tokenize
 
 logger = logging.getLogger("reporevive.retrieval")
 
+_TABLE = "reporevive_chunks"
+
 
 class PgVectorRetriever:
-    def __init__(self, dsn: str, namespace: str, embedder: Embedder, dim: int) -> None:
+    def __init__(self, dsn: str, namespace: str, embedder: Embedder, count: int) -> None:
         self._dsn = dsn
         self._namespace = namespace
         self._embedder = embedder
-        self._dim = dim
-        self._count = 0
+        self._count = count
 
     @classmethod
     def build(
@@ -48,41 +56,46 @@ class PgVectorRetriever:
         if not settings.database_url:
             raise RuntimeError("RETRIEVAL_MODE=pgvector requires DATABASE_URL")
 
+        namespace = uuid.uuid4().hex
+        chunks = list(_chunk_files(files, chunk_lines, overlap))
+        if not chunks:
+            # Nothing to index; don't touch the database.
+            return cls(settings.database_url, namespace, embedder, 0)
+
         import psycopg
         from pgvector.psycopg import register_vector
 
-        chunks = list(_chunk_files(files, chunk_lines, overlap))
-        namespace = uuid.uuid4().hex
-        vectors = embedder.embed([c[3] for c in chunks], task_type=DOCUMENT_TASK) if chunks else []
-        dim = len(vectors[0]) if vectors else 0
+        vectors = embedder.embed([c[3] for c in chunks], task_type=DOCUMENT_TASK)
+        dim = len(vectors[0])
 
         with psycopg.connect(settings.database_url) as conn:
             conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             register_vector(conn)
             conn.execute(
-                "CREATE TABLE IF NOT EXISTS reporevive_chunks ("
+                f"CREATE TABLE IF NOT EXISTS {_TABLE} ("
                 "  id bigserial PRIMARY KEY,"
                 "  namespace text NOT NULL,"
                 "  file text NOT NULL,"
                 "  start_line int NOT NULL,"
                 "  end_line int NOT NULL,"
                 "  content text NOT NULL,"
-                f"  embedding vector({dim or 768})"
+                f"  embedding vector({dim})"
                 ")"
+            )
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS {_TABLE}_namespace_idx ON {_TABLE} (namespace)"
             )
             with conn.cursor() as cur:
                 for (path, start, end, text), vec in zip(chunks, vectors):
                     cur.execute(
-                        "INSERT INTO reporevive_chunks "
+                        f"INSERT INTO {_TABLE} "
                         "(namespace, file, start_line, end_line, content, embedding) "
                         "VALUES (%s, %s, %s, %s, %s, %s)",
                         (namespace, path, start, end, text, vec),
                     )
             conn.commit()
 
-        retriever = cls(settings.database_url, namespace, embedder, dim)
-        retriever._count = len(chunks)
-        return retriever
+        return cls(settings.database_url, namespace, embedder, len(chunks))
 
     @property
     def size(self) -> int:
@@ -98,9 +111,9 @@ class PgVectorRetriever:
         with psycopg.connect(self._dsn) as conn:
             register_vector(conn)
             rows = conn.execute(
-                "SELECT file, start_line, end_line, content, "
+                f"SELECT file, start_line, end_line, content, "
                 "1 - (embedding <=> %s) AS score "
-                "FROM reporevive_chunks WHERE namespace = %s "
+                f"FROM {_TABLE} WHERE namespace = %s "
                 "ORDER BY embedding <=> %s LIMIT %s",
                 (q_vec, self._namespace, q_vec, k),
             ).fetchall()

@@ -4,6 +4,6 @@
 # package or GEMINI_API_KEY is absent.
 google-genai>=0.3
 
-# Optional: only needed for RETRIEVAL_MODE=pgvector (Postgres + pgvector).
-# psycopg[binary]>=3.1
-# pgvector>=0.2
+# Used for RETRIEVAL_MODE=pgvector (Postgres + pgvector). Harmless when unused.
+psycopg[binary]>=3.1
+pgvector>=0.2
