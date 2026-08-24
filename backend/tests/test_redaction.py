@@ -41,3 +41,54 @@ def test_masked_evidence_does_not_leak_secret():
     for hit in hits:
         assert "abcdEFGH1234ijklMNOP5678qrstUVWX9012yzAB" not in hit.masked_evidence
         assert "redacted" in hit.masked_evidence
+
+
+def test_redacts_connection_string_password():
+    secret = "Sup3rSecretDbPass"
+    text = f"DATABASE_URL=postgresql://appuser:{secret}@db.example.com:5432/app\n"
+    redacted, hits = redact_text(text)
+    assert secret not in redacted
+    assert any(h.kind == "connection_string_password" for h in hits)
+    # Host and user survive; only the password is masked.
+    assert "appuser" in redacted and "db.example.com" in redacted
+
+
+def test_short_placeholder_db_password_not_redacted():
+    # Common example creds (short) must not trip the connection-string pattern.
+    text = "DATABASE_URL=postgres://user:pass@localhost/db\n"
+    redacted, hits = redact_text(text)
+    assert redacted.strip() == text.strip()
+    assert hits == []
+
+
+def test_redacts_bearer_token():
+    text = "Authorization: Bearer abcDEF123456ghiJKL789mnoPQR\n"
+    redacted, hits = redact_text(text)
+    assert "abcDEF123456ghiJKL789mnoPQR" not in redacted
+    assert any(h.kind == "bearer_token" for h in hits)
+
+
+def test_redacts_openai_and_sendgrid_and_oauth():
+    cases = [
+        ("openai_api_key", "sk-" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6"),
+        ("sendgrid_api_key", "SG.abcdefghij1234567890.abcdefghij1234567890XYZ"),
+        ("google_oauth_token", "ya29.a0AeRealTokenMaterial1234567890XYZ"),
+    ]
+    for kind, secret in cases:
+        redacted, hits = redact_text(f"const t = '{secret}';\n")
+        assert secret not in redacted, kind
+        assert any(h.kind == kind for h in hits), kind
+
+
+def test_redacts_unquoted_env_secret():
+    text = "API_SECRET=8f3a9b2c7d1e4f60a9b8c7d6e5f40312\n"
+    redacted, hits = redact_text(text)
+    assert "8f3a9b2c7d1e4f60a9b8c7d6e5f40312" not in redacted
+    assert any(h.kind == "env_secret_assignment" for h in hits)
+
+
+def test_env_secret_from_code_getenv_not_flagged():
+    # Reading an env var in code is not a secret value.
+    text = 'SECRET_TOKEN = os.getenv("SECRET_TOKEN")\n'
+    _redacted, hits = redact_text(text)
+    assert all(h.kind != "env_secret_assignment" for h in hits)

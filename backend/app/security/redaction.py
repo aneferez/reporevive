@@ -27,11 +27,15 @@ _PLACEHOLDER_HINTS = (
     "example",
     "changeme",
     "change_me",
+    "changeit",
     "placeholder",
     "xxxx",
     "todo",
     "dummy",
     "sample",
+    "localhost",
+    "notreal",
+    "fake",
     "<",
     ">",
     "...",
@@ -59,20 +63,45 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
     ("google_api_key", re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b")),
+    ("google_oauth_token", re.compile(r"\bya29\.[A-Za-z0-9_\-]{20,}")),
     ("github_token", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b")),
     ("github_pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b")),
     ("slack_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+    ("slack_webhook", re.compile(r"https://hooks\.slack\.com/services/[A-Za-z0-9/_+\-]{20,}")),
     ("stripe_secret_key", re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b")),
+    ("openai_api_key", re.compile(r"\bsk-[A-Za-z0-9]{32,}\b")),
+    ("sendgrid_api_key", re.compile(r"\bSG\.[A-Za-z0-9_\-]{16,}\.[A-Za-z0-9_\-]{16,}\b")),
+    (
+        "azure_storage_key",
+        re.compile(r"(?i)AccountKey\s*=\s*(?P<secret>[A-Za-z0-9+/=]{40,})"),
+    ),
     (
         "json_web_token",
         re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
     ),
+    ("bearer_token", re.compile(r"(?i)\bbearer\s+(?P<secret>[A-Za-z0-9._\-]{20,})")),
+    (
+        # scheme://user:PASSWORD@host — redact the embedded password (>=8 chars).
+        "connection_string_password",
+        re.compile(r"://[^:/@\s]+:(?P<secret>[^@/\s]{8,})@"),
+    ),
     (
         "generic_secret_assignment",
         re.compile(
-            r"(?i)\b(?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key"
-            r"|client[_-]?secret|auth[_-]?token)\b\s*[=:]\s*"
+            r"(?i)\b(?:api[_-]?key|secret[_-]?key|secret|access[_-]?token"
+            r"|refresh[_-]?token|auth[_-]?token|client[_-]?secret|token|password"
+            r"|passwd|pwd|access[_-]?key|private[_-]?key|sas[_-]?token"
+            r"|connection[_-]?string)\b\s*[=:]\s*"
             r"['\"](?P<secret>[^'\"\n]{6,})['\"]"
+        ),
+    ),
+    (
+        # Unquoted .env-style assignment of a sensitive key (>=12-char value).
+        "env_secret_assignment",
+        re.compile(
+            r"(?i)(?:^|\b)[A-Za-z0-9_]*(?:api[_-]?key|secret|token|password|passwd"
+            r"|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?token)"
+            r"[A-Za-z0-9_]*\s*[=:]\s*(?P<secret>[A-Za-z0-9._\-+/=]{12,})"
         ),
     ),
 ]
