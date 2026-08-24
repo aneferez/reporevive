@@ -8,8 +8,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Install AI deps too so Gemini chat/narration/embeddings work in production.
+# For a lean, deterministic-only image, remove requirements-ai.txt below.
+COPY requirements.txt requirements-ai.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-ai.txt
 
 COPY app ./app
 

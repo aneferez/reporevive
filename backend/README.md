@@ -103,11 +103,13 @@ The service is stateless (in-memory store) and reads all configuration from
 environment variables. Provided configs:
 
 - **Docker**: `docker build -t reporevive-backend . && docker run -p 8000:8000 --env-file .env reporevive-backend`
-- **Render**: `render.yaml` blueprint (free plan, `healthCheckPath: /health`).
+- **Render**: Blueprint at the repo root ([`../render.yaml`](../render.yaml)) — the
+  Docker/build already installs the AI deps.
 - **Procfile**: `web: uvicorn app.main:app --host 0.0.0.0 --port $PORT` for
   Procfile-based platforms.
 
-Set `FRONTEND_ORIGIN` to the deployed frontend origin(s) so CORS allows it.
+Set `FRONTEND_ORIGIN` to the deployed frontend origin(s) so CORS allows it. See
+the full step-by-step in [`../DEPLOY.md`](../DEPLOY.md).
 
 ---
 

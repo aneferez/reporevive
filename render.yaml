@@ -1,0 +1,39 @@
+# Render Blueprint for the RepoRevive backend.
+#
+# Render reads a Blueprint named `render.yaml` at the REPOSITORY ROOT (here).
+# Deploy: Render dashboard -> New -> Blueprint -> connect this repo.
+#
+# The frontend is deployed separately (Vercel / Netlify / Render static site) by
+# the frontend owner; see DEPLOY.md for the full flow and how to wire the two.
+services:
+  - type: web
+    name: reporevive-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    # Install AI deps too so Gemini chat/narration/embeddings work in production.
+    # For a lean, deterministic-only deploy, drop `-r requirements-ai.txt`.
+    buildCommand: pip install -r requirements.txt -r requirements-ai.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      # Set to the deployed frontend origin(s), comma-separated (CORS allowlist).
+      - key: FRONTEND_ORIGIN
+        sync: false
+      # Server-side secret. Leave unset to run deterministic-only (no AI).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: EMBEDDING_MODEL
+        value: gemini-embedding-001
+      # lexical (default, no quota) | embeddings (semantic, uses AI quota) | pgvector
+      - key: RETRIEVAL_MODE
+        value: lexical
+      # Optional, public repos only; raises GitHub's anonymous rate limit.
+      - key: GITHUB_TOKEN
+        sync: false
