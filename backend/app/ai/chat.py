@@ -51,7 +51,11 @@ def answer_question(record: AnalysisRecord, question: str) -> ChatResponse:
     provider = get_provider(settings)
 
     if provider.available():
-        context = build_context_block(hits)
+        context = build_context_block(
+            hits,
+            max_chars=settings.max_ai_context_chars,
+            max_files=settings.max_ai_files,
+        )
         prompt = f"Repository excerpts:\n\n{context}\n\nQuestion: {question}\n\nAnswer:"
         try:
             answer = provider.generate(system=_SYSTEM, prompt=prompt)

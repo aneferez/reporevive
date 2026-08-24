@@ -46,6 +46,31 @@ def test_chat_insufficient_evidence(client):
     assert body["citations"] == []
 
 
+def test_context_block_respects_char_cap():
+    from app.ai.grounding import build_context_block
+    from app.retrieval.base import SearchHit
+
+    hits = [
+        SearchHit(file=f"f{i}.py", start_line=1, end_line=40, text="x" * 500, score=1.0)
+        for i in range(20)
+    ]
+    ctx = build_context_block(hits, max_chars=1000, max_files=100)
+    assert len(ctx) <= 1000 + 100  # bounded (tiny separator overhead allowed)
+
+
+def test_context_block_respects_file_cap():
+    from app.ai.grounding import build_context_block
+    from app.retrieval.base import SearchHit
+
+    hits = [
+        SearchHit(file=f"f{i}.py", start_line=1, end_line=5, text="hello world", score=1.0)
+        for i in range(10)
+    ]
+    ctx = build_context_block(hits, max_chars=100000, max_files=3)
+    files = {ln[1:].split(":")[0] for ln in ctx.splitlines() if ln.startswith("[")}
+    assert len(files) <= 3
+
+
 def _fake_provider(generate):
     class _P:
         def available(self):

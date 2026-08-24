@@ -53,7 +53,8 @@ class Settings(BaseSettings):
     max_extracted_bytes: int = 50 * 1024 * 1024  # 50 MB extracted
     max_analyzed_files: int = 1000
     max_file_bytes: int = 256 * 1024  # 256 KB per text file
-    max_ai_files: int = 100  # files sent through AI summarization per analysis
+    max_ai_files: int = 100  # distinct files whose content may reach the AI
+    max_ai_context_chars: int = 8000  # hard cap on retrieved context per AI call
 
     # --- Retention --------------------------------------------------------
     # Oldest analyses beyond this count are evicted from the in-memory store.

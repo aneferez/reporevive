@@ -12,16 +12,27 @@ from ..retrieval.lexical import SearchHit
 from ..security.redaction import redact_text
 
 
-def build_context_block(hits: list[SearchHit], *, max_chars: int = 4000) -> str:
+def build_context_block(
+    hits: list[SearchHit], *, max_chars: int = 4000, max_files: int = 100
+) -> str:
+    """Assemble the retrieved context, enforcing hard caps on total characters
+    and the number of distinct files that reach the AI provider.
+    """
+
     parts: list[str] = []
     used = 0
+    files_seen: set[str] = set()
     for hit in hits:
+        # Enforce the distinct-file cap.
+        if hit.file not in files_seen and len(files_seen) >= max_files:
+            continue
         safe, _ = redact_text(hit.excerpt(max_lines=8, max_chars=600))
         block = f"[{hit.file}:{hit.start_line}]\n{safe}"
         if used + len(block) > max_chars:
             break
         parts.append(block)
         used += len(block)
+        files_seen.add(hit.file)
     return "\n\n".join(parts)
 
 
