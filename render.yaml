@@ -21,6 +21,9 @@ services:
         value: production
       - key: PYTHON_VERSION
         value: "3.12.6"
+      # Render terminates TLS at one proxy in front of the app.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
       # Set to the deployed frontend origin(s), comma-separated (CORS allowlist).
       - key: FRONTEND_ORIGIN
         sync: false

@@ -113,12 +113,21 @@ def parse_github_url(raw_url: str) -> GitHubRepoRef:
     return GitHubRepoRef(owner=owner, repo=repo)
 
 
-def fetch_repo_tarball(ref: GitHubRepoRef, settings: Settings) -> bytes:
-    """Download a public repository's default-branch tarball.
+def _is_allowed_download_host(host: str) -> bool:
+    host = (host or "").lower()
+    if host in {"api.github.com", "codeload.github.com", "github.com", "www.github.com"}:
+        return True
+    # GitHub serves archive blobs from *.githubusercontent.com.
+    return host.endswith(".githubusercontent.com")
 
-    Only ``api.github.com`` is contacted, and only for the validated public
-    ``owner/repo``. Raises ``PipelineError`` with a structured code on any
-    failure. Does not fetch arbitrary user-supplied hosts (SSRF guard).
+
+def fetch_repo_tarball(ref: GitHubRepoRef, settings: Settings) -> bytes:
+    """Download a public repository's default-branch tarball, safely.
+
+    Only ``api.github.com`` is contacted, redirects are bounded and their final
+    host is validated (SSRF guard), and the body is streamed with a hard byte
+    cap so an oversized response can't exhaust memory. Raises ``PipelineError``
+    with a structured code on any failure.
     """
 
     url = f"https://api.github.com/repos/{ref.owner}/{ref.repo}/tarball"
@@ -130,27 +139,48 @@ def fetch_repo_tarball(ref: GitHubRepoRef, settings: Settings) -> bytes:
     if settings.github_token:
         headers["Authorization"] = f"Bearer {settings.github_token}"
 
+    max_bytes = settings.max_extracted_bytes
     try:
         with httpx.Client(
-            follow_redirects=True, timeout=settings.github_request_timeout_s
+            follow_redirects=True,
+            timeout=settings.github_request_timeout_s,
+            max_redirects=5,
         ) as client:
-            resp = client.get(url, headers=headers)
+            with client.stream("GET", url, headers=headers) as resp:
+                # Validate the final host after any redirects.
+                if not _is_allowed_download_host(resp.url.host or ""):
+                    raise PipelineError(
+                        ErrorCode.REPOSITORY_NOT_FOUND,
+                        "The repository download redirected to an unexpected host.",
+                    )
+                if resp.status_code != 200:
+                    resp.read()  # load the (small) error body for status handling
+                    _raise_for_github_status(resp, ref)
+
+                ctype = resp.headers.get("content-type", "").lower()
+                if "html" in ctype:
+                    raise PipelineError(
+                        ErrorCode.REPOSITORY_NOT_FOUND,
+                        "Unexpected response while fetching the repository.",
+                    )
+
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in resp.iter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise PipelineError(
+                            ErrorCode.REPOSITORY_TOO_LARGE,
+                            "The repository archive is too large to analyze.",
+                        )
+                    chunks.append(chunk)
+                return b"".join(chunks)
     except httpx.HTTPError as exc:
         logger.warning("GitHub fetch failed for %s: %s", ref.full_name, exc)
         raise PipelineError(
             ErrorCode.REPOSITORY_NOT_FOUND,
             "Could not reach the repository. Check the URL and try again.",
         ) from exc
-
-    _raise_for_github_status(resp, ref)
-
-    data = resp.content
-    if len(data) > settings.max_extracted_bytes:
-        raise PipelineError(
-            ErrorCode.REPOSITORY_TOO_LARGE,
-            "The repository archive is too large to analyze.",
-        )
-    return data
 
 
 def _raise_for_github_status(resp: httpx.Response, ref: GitHubRepoRef) -> None:

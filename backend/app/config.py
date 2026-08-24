@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     rate_limit_analysis_start_max: int = 10  # analyze + upload, per window
     rate_limit_chat_max: int = 30  # chat questions, per window
+    # Number of trusted reverse-proxy hops in front of the app. 0 = ignore
+    # X-Forwarded-For and use the socket peer (prevents client IP spoofing when
+    # not behind a proxy). Set to 1 on platforms like Render.
+    trusted_proxy_hops: int = 0
 
     @property
     def ai_enabled(self) -> bool:

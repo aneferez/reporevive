@@ -68,10 +68,22 @@ def reset_limiter() -> None:
 
 
 def client_ip(request: Request) -> str:
-    # Honor the first hop of X-Forwarded-For when behind a proxy (Render, etc.).
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Best-effort client IP, resistant to X-Forwarded-For spoofing.
+
+    X-Forwarded-For is only trusted when ``trusted_proxy_hops`` > 0, and then we
+    take the entry contributed by the outermost trusted proxy (``hops`` from the
+    right) — the real client as seen by our infrastructure — rather than the
+    leftmost value, which a client can forge.
+    """
+
+    hops = get_settings().trusted_proxy_hops
+    if hops > 0:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+            if parts:
+                idx = len(parts) - hops
+                return parts[idx] if 0 <= idx < len(parts) else parts[0]
     if request.client:
         return request.client.host
     return "unknown"

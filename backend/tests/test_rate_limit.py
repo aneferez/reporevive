@@ -1,8 +1,31 @@
 from __future__ import annotations
 
+import app.api.ratelimit as rl
 from app.api.ratelimit import RateLimiter
+from app.config import Settings
 
 from .helpers import make_zip
+
+
+class _FakeReq:
+    def __init__(self, xff=None, peer="9.9.9.9"):
+        self.headers = {"x-forwarded-for": xff} if xff is not None else {}
+        self.client = type("C", (), {"host": peer})() if peer else None
+
+
+def test_client_ip_ignores_xff_without_trusted_proxies(monkeypatch):
+    monkeypatch.setattr(rl, "get_settings", lambda: Settings(trusted_proxy_hops=0))
+    req = _FakeReq(xff="8.8.8.8, 1.1.1.1", peer="9.9.9.9")
+    assert rl.client_ip(req) == "9.9.9.9"  # forged XFF ignored
+
+
+def test_client_ip_uses_trusted_hop(monkeypatch):
+    monkeypatch.setattr(rl, "get_settings", lambda: Settings(trusted_proxy_hops=1))
+    # Attacker forges the leftmost entry; the proxy appends the real client last.
+    req = _FakeReq(xff="8.8.8.8, 203.0.113.9", peer="10.0.0.1")
+    assert rl.client_ip(req) == "203.0.113.9"
+    # Single trusted-proxy entry.
+    assert rl.client_ip(_FakeReq(xff="203.0.113.9", peer="10.0.0.1")) == "203.0.113.9"
 
 
 def test_limiter_allows_up_to_limit_then_blocks():
