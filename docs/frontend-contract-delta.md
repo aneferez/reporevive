@@ -29,6 +29,42 @@ styling. The backend now emits `type: "persistence"` (the node `id` stays
 
 ---
 
+## New: per-analysis ownership tokens (additive, opt-in)
+
+The intake responses (`POST /api/repositories/analyze` and `/upload`) now include
+a secret **`owner_token`** field, returned **once** at creation:
+
+```jsonc
+{ "analysis_id": "analysis_…", "status": "queued", "repository": { … },
+  "owner_token": "…secret…" }
+```
+
+To enable ownership isolation (so only the creator can read/delete an analysis),
+the frontend should:
+
+1. **Store** the `owner_token` when an analysis is created (e.g. in memory /
+   sessionStorage, keyed by `analysis_id`).
+2. **Send** it as the **`X-Owner-Token`** header on every analysis-scoped request
+   (`GET /api/analysis/{id}`, `…/architecture|findings|roadmap|report`,
+   `POST …/chat`, `DELETE …/{id}`).
+
+Enforcement is **off by default** on the backend (`REQUIRE_OWNER_TOKEN=false`), so
+nothing breaks today. Once the frontend sends the header, we flip it on and the
+API returns `403 OWNER_TOKEN_INVALID` for missing/incorrect tokens.
+
+Suggested `types.ts` change:
+
+```diff
+ export interface AnalysisStartResponse {
+   analysis_id: string;
+   status: AnalysisStatus;
+   repository: RepositoryIdentity;
++  owner_token?: string;   // secret; store it and send as X-Owner-Token
+ }
+```
+
+---
+
 ## Action items (frontend `types.ts`)
 
 None of these break the app today (your UI is tolerant), but the types are

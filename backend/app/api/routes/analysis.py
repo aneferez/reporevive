@@ -27,7 +27,7 @@ from ...models.schemas import (
     ReportResponse,
     RoadmapResponse,
 )
-from ..deps import get_record_or_404, require_completed, store_dep
+from ..deps import get_owned_record, require_completed, store_dep
 from ..ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
@@ -36,7 +36,7 @@ _chat_limit = rate_limit("chat")
 
 
 @router.get("/{analysis_id}", response_model=AnalysisSummaryResponse)
-def get_analysis(record: AnalysisRecord = Depends(get_record_or_404)) -> AnalysisSummaryResponse:
+def get_analysis(record: AnalysisRecord = Depends(get_owned_record)) -> AnalysisSummaryResponse:
     completed = record.status == AnalysisStatus.completed
     error = None
     if record.status == AnalysisStatus.failed and record.error_code:
@@ -59,19 +59,19 @@ def get_analysis(record: AnalysisRecord = Depends(get_record_or_404)) -> Analysi
 
 
 @router.get("/{analysis_id}/architecture", response_model=ArchitectureResponse)
-def get_architecture(record: AnalysisRecord = Depends(get_record_or_404)) -> ArchitectureResponse:
+def get_architecture(record: AnalysisRecord = Depends(get_owned_record)) -> ArchitectureResponse:
     require_completed(record)
     return record.architecture
 
 
 @router.get("/{analysis_id}/findings", response_model=FindingsResponse)
-def get_findings(record: AnalysisRecord = Depends(get_record_or_404)) -> FindingsResponse:
+def get_findings(record: AnalysisRecord = Depends(get_owned_record)) -> FindingsResponse:
     require_completed(record)
     return FindingsResponse(items=record.findings, total=len(record.findings))
 
 
 @router.get("/{analysis_id}/roadmap", response_model=RoadmapResponse)
-def get_roadmap(record: AnalysisRecord = Depends(get_record_or_404)) -> RoadmapResponse:
+def get_roadmap(record: AnalysisRecord = Depends(get_owned_record)) -> RoadmapResponse:
     require_completed(record)
     return RoadmapResponse(items=record.roadmap)
 
@@ -83,7 +83,7 @@ def get_roadmap(record: AnalysisRecord = Depends(get_record_or_404)) -> RoadmapR
 )
 def chat(
     payload: ChatRequest,
-    record: AnalysisRecord = Depends(get_record_or_404),
+    record: AnalysisRecord = Depends(get_owned_record),
 ) -> ChatResponse:
     require_completed(record)
     # Phase 4 replaces this with retrieval-grounded, cited answers. Until then,
@@ -94,7 +94,7 @@ def chat(
 
 
 @router.get("/{analysis_id}/report", response_model=ReportResponse)
-def get_report(record: AnalysisRecord = Depends(get_record_or_404)) -> ReportResponse:
+def get_report(record: AnalysisRecord = Depends(get_owned_record)) -> ReportResponse:
     require_completed(record)
     return ReportResponse(
         analysis_id=record.analysis_id,
@@ -114,14 +114,12 @@ def get_report(record: AnalysisRecord = Depends(get_record_or_404)) -> ReportRes
 
 @router.delete("/{analysis_id}", response_model=DeleteResponse)
 def delete_analysis(
-    analysis_id: str, store: AnalysisStore = Depends(store_dep)
+    record: AnalysisRecord = Depends(get_owned_record),
+    store: AnalysisStore = Depends(store_dep),
 ) -> DeleteResponse:
-    # Idempotent: return 200 whether or not it existed, but report the result.
-    deleted = store.delete(analysis_id)
-    if not deleted:
-        # Surface a clear 404 so the client knows nothing was there.
-        get_record_or_404(analysis_id, store)
-    return DeleteResponse(analysis_id=analysis_id, deleted=deleted)
+    # Ownership is enforced by the dependency (404 if missing, 403 if not owned).
+    store.delete(record.analysis_id)
+    return DeleteResponse(analysis_id=record.analysis_id, deleted=True)
 
 
 def _default_limitations() -> list[str]:

@@ -53,6 +53,10 @@ class AnalysisRecord:
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
+    # SHA-256 of the per-analysis owner token (plaintext token is returned once
+    # at creation and never stored). Used for ownership isolation.
+    owner_token_hash: str | None = None
+
     # Failure info (redaction-safe, user-presentable).
     error_code: str | None = None
     error_message: str | None = None

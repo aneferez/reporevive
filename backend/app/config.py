@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     rate_limit_analysis_start_max: int = 10  # analyze + upload, per window
     rate_limit_chat_max: int = 30  # chat questions, per window
+    # Require the X-Owner-Token header on analysis-scoped endpoints. Off by
+    # default for backward compatibility; enable once the frontend stores the
+    # owner_token returned on creation and sends it back.
+    require_owner_token: bool = False
+
     # Number of trusted reverse-proxy hops in front of the app. 0 = ignore
     # X-Forwarded-For and use the socket peer (prevents client IP spoofing when
     # not behind a proxy). Set to 1 on platforms like Render.

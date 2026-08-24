@@ -18,6 +18,7 @@ from ...core.store import AnalysisStore
 from ...intake.github import parse_github_url
 from ...models.enums import AnalysisStatus, SourceType
 from ...models.schemas import AnalysisStartResponse, AnalyzeRequest, RepositoryInfo
+from ...security.ownership import hash_owner_token, new_owner_token
 from ..deps import store_dep
 from ..errors import AppError, ErrorCode
 from ..ratelimit import rate_limit
@@ -49,12 +50,14 @@ def analyze_repository(
         source_type=SourceType.github,
         url=ref.canonical_url,
     )
+    owner_token = new_owner_token()
     record = AnalysisRecord(
         analysis_id=_new_analysis_id(),
         repository=repository,
         source_type=SourceType.github,
         github_owner=ref.owner,
         github_repo=ref.repo,
+        owner_token_hash=hash_owner_token(owner_token),
     )
     store.create(record)
     background.add_task(run_analysis, store, record.analysis_id)
@@ -63,6 +66,7 @@ def analyze_repository(
         analysis_id=record.analysis_id,
         status=AnalysisStatus.queued,
         repository=repository,
+        owner_token=owner_token,
     )
 
 
@@ -101,12 +105,14 @@ async def upload_repository(
 
     name = filename[:-4] if filename.lower().endswith(".zip") else filename
     repository = RepositoryInfo(name=name, source_type=SourceType.zip, url=None)
+    owner_token = new_owner_token()
     record = AnalysisRecord(
         analysis_id=_new_analysis_id(),
         repository=repository,
         source_type=SourceType.zip,
         archive_bytes=data,
         archive_filename=filename,
+        owner_token_hash=hash_owner_token(owner_token),
     )
     store.create(record)
     background.add_task(run_analysis, store, record.analysis_id)
@@ -115,4 +121,5 @@ async def upload_repository(
         analysis_id=record.analysis_id,
         status=AnalysisStatus.queued,
         repository=repository,
+        owner_token=owner_token,
     )

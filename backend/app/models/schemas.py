@@ -65,6 +65,9 @@ class AnalysisStartResponse(BaseModel):
     analysis_id: str
     status: AnalysisStatus
     repository: RepositoryInfo
+    # Secret owner token, returned once at creation. Store it and send it back as
+    # the X-Owner-Token header to access this analysis when enforcement is on.
+    owner_token: str | None = None
 
 
 # ---------------------------------------------------------------------------
