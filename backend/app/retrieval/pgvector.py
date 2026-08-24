@@ -122,3 +122,14 @@ class PgVectorRetriever:
             SearchHit(file=r[0], start_line=r[1], end_line=r[2], text=r[3], score=float(r[4]))
             for r in rows
         ]
+
+    def cleanup(self) -> None:
+        """Delete this analysis's rows from the shared table (retention)."""
+
+        if self._count == 0:
+            return
+        import psycopg
+
+        with psycopg.connect(self._dsn) as conn:
+            conn.execute(f"DELETE FROM {_TABLE} WHERE namespace = %s", (self._namespace,))
+            conn.commit()

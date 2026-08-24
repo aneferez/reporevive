@@ -133,6 +133,17 @@ def test_build_and_search_flow(fake_db):
     assert any("SELECT" in sql and "<=>" in sql for _, sql, _ in search_conn.executed)
 
 
+def test_cleanup_deletes_namespace_rows(fake_db):
+    files = make_files({"a.py": "x = 1\n"})
+    retr = PgVectorRetriever.build(files, RecordingEmbedder(), _settings(database_url="postgresql://x/db"))
+    retr.cleanup()
+    cleanup_conn = fake_db[-1]
+    assert any(
+        "DELETE FROM" in sql and "namespace" in sql for _, sql, _ in cleanup_conn.executed
+    )
+    assert cleanup_conn.committed is True
+
+
 def test_factory_routes_to_pgvector(fake_db):
     retr = build_retriever(
         make_files({"a.py": "x = 1\n"}),

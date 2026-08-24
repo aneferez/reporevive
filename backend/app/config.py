@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # --- Retention --------------------------------------------------------
     # Oldest analyses beyond this count are evicted from the in-memory store.
     max_stored_analyses: int = 100
+    # Time-based retention: analyses older than this are purged (with their
+    # pgvector rows). 0 disables time-based expiry (count cap still applies).
+    analysis_ttl_seconds: int = 0
 
     # --- Rate limiting ----------------------------------------------------
     # In-process, per-client fixed-window limits on the expensive POST
