@@ -20,8 +20,11 @@ from ...models.enums import AnalysisStatus, SourceType
 from ...models.schemas import AnalysisStartResponse, AnalyzeRequest, RepositoryInfo
 from ..deps import store_dep
 from ..errors import AppError, ErrorCode
+from ..ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/repositories", tags=["intake"])
+
+_start_limit = rate_limit("analysis_start")
 
 
 def _new_analysis_id() -> str:
@@ -32,6 +35,7 @@ def _new_analysis_id() -> str:
     "/analyze",
     response_model=AnalysisStartResponse,
     status_code=HTTPStatus.ACCEPTED,
+    dependencies=[Depends(_start_limit)],
 )
 def analyze_repository(
     payload: AnalyzeRequest,
@@ -66,6 +70,7 @@ def analyze_repository(
     "/upload",
     response_model=AnalysisStartResponse,
     status_code=HTTPStatus.ACCEPTED,
+    dependencies=[Depends(_start_limit)],
 )
 async def upload_repository(
     background: BackgroundTasks,

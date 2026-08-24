@@ -41,7 +41,8 @@ frontend/    React + Vite frontend (separate owner) — not part of this backend
   experimental). All power grounded, cited chat; the optional Gemini layer also
   adds narration and degrades gracefully when no key is set.
 - **Safety** — no code execution, GitHub-only fetching, redaction before storage/
-  logging/AI/response, structured errors, and explicit uncertainty on findings.
+  logging/AI/response, structured errors, per-client rate limiting on POST
+  endpoints, and explicit uncertainty on findings.
 
 ### Run the backend
 

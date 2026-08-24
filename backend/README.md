@@ -130,6 +130,10 @@ Set `FRONTEND_ORIGIN` to the deployed frontend origin(s) so CORS allows it.
 | `MAX_FILE_BYTES` | `262144` | Max per-file text size (256 KB). |
 | `MAX_AI_FILES` | `100` | Max files sent to AI per analysis. |
 | `MAX_STORED_ANALYSES` | `100` | In-memory retention cap. |
+| `RATE_LIMIT_ENABLED` | `true` | Per-client limits on POST endpoints. |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window. |
+| `RATE_LIMIT_ANALYSIS_START_MAX` | `10` | analyze+upload per window, per client. |
+| `RATE_LIMIT_CHAT_MAX` | `30` | chat questions per window, per client. |
 
 Never commit real secrets. `.env.example` holds placeholders only.
 
@@ -163,4 +167,5 @@ backend/
 - Only valid public `github.com/{owner}/{repo}` URLs are fetched (SSRF guard).
 - Archive path-traversal / symlink rejection and size/count limits.
 - Suspected secrets are redacted before storage, logging, AI calls, or responses.
+- Per-client rate limiting on POST endpoints (analyze/upload/chat); GET polling is exempt.
 - Uncertain findings are marked explicitly; inference is never shown as fact.

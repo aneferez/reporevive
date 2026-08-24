@@ -28,8 +28,11 @@ from ...models.schemas import (
     RoadmapResponse,
 )
 from ..deps import get_record_or_404, require_completed, store_dep
+from ..ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+
+_chat_limit = rate_limit("chat")
 
 
 @router.get("/{analysis_id}", response_model=AnalysisSummaryResponse)
@@ -73,7 +76,11 @@ def get_roadmap(record: AnalysisRecord = Depends(get_record_or_404)) -> RoadmapR
     return RoadmapResponse(items=record.roadmap)
 
 
-@router.post("/{analysis_id}/chat", response_model=ChatResponse)
+@router.post(
+    "/{analysis_id}/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(_chat_limit)],
+)
 def chat(
     payload: ChatRequest,
     record: AnalysisRecord = Depends(get_record_or_404),

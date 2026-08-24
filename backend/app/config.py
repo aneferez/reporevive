@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     # Oldest analyses beyond this count are evicted from the in-memory store.
     max_stored_analyses: int = 100
 
+    # --- Rate limiting ----------------------------------------------------
+    # In-process, per-client fixed-window limits on the expensive POST
+    # endpoints. Status polling (GETs) is never limited. For multi-instance
+    # deploys a shared backend (e.g. Redis) would be needed.
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
+    rate_limit_analysis_start_max: int = 10  # analyze + upload, per window
+    rate_limit_chat_max: int = 30  # chat questions, per window
+
     @property
     def ai_enabled(self) -> bool:
         return bool(self.gemini_api_key)

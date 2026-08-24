@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.ratelimit import reset_limiter
 from app.core.store import reset_store
 from app.main import create_app
 
@@ -12,11 +13,13 @@ from .helpers import make_tar_gz
 
 
 @pytest.fixture(autouse=True)
-def _isolate_store():
-    # The store is a process-wide singleton; reset it around each test.
+def _isolate_state():
+    # Store and rate limiter are process-wide singletons; reset around each test.
     reset_store()
+    reset_limiter()
     yield
     reset_store()
+    reset_limiter()
 
 
 @pytest.fixture(autouse=True)

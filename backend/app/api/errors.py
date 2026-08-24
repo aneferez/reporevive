@@ -47,11 +47,13 @@ class AppError(Exception):
         code: str,
         message: str,
         status_code: int = HTTPStatus.BAD_REQUEST,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.headers = headers
 
 
 def _request_id(request: Request) -> str | None:
@@ -59,19 +61,25 @@ def _request_id(request: Request) -> str | None:
 
 
 def _error_response(
-    status_code: int, code: str, message: str, request_id: str | None
+    status_code: int,
+    code: str,
+    message: str,
+    request_id: str | None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     payload = ErrorResponse(
         error=ErrorDetail(code=code, message=message, request_id=request_id)
     )
-    return JSONResponse(status_code=status_code, content=payload.model_dump())
+    return JSONResponse(
+        status_code=status_code, content=payload.model_dump(), headers=headers
+    )
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return _error_response(
-            exc.status_code, exc.code, exc.message, _request_id(request)
+            exc.status_code, exc.code, exc.message, _request_id(request), exc.headers
         )
 
     @app.exception_handler(RequestValidationError)
