@@ -50,6 +50,7 @@ class Settings(BaseSettings):
 
     # --- Safety limits (PRD section 7) ------------------------------------
     max_archive_bytes: int = 10 * 1024 * 1024  # 10 MB compressed
+    max_archive_entries: int = 10_000  # ZIP/TAR metadata entries
     max_extracted_bytes: int = 50 * 1024 * 1024  # 50 MB extracted
     max_analyzed_files: int = 1000
     max_file_bytes: int = 256 * 1024  # 256 KB per text file

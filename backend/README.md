@@ -127,15 +127,19 @@ the full step-by-step in [`../DEPLOY.md`](../DEPLOY.md).
 | `GITHUB_TOKEN` | _(empty)_ | Optional; public repos only, raises rate limit. |
 | `DATABASE_URL` | _(empty)_ | Optional persistence (Supabase/Postgres). |
 | `MAX_ARCHIVE_BYTES` | `10485760` | Max compressed upload (10 MB). |
+| `MAX_ARCHIVE_ENTRIES` | `10000` | Max ZIP/TAR metadata entries. |
 | `MAX_EXTRACTED_BYTES` | `52428800` | Max extracted total (50 MB). |
 | `MAX_ANALYZED_FILES` | `1000` | Max inspected files. |
 | `MAX_FILE_BYTES` | `262144` | Max per-file text size (256 KB). |
 | `MAX_AI_FILES` | `100` | Max files sent to AI per analysis. |
 | `MAX_STORED_ANALYSES` | `100` | In-memory retention cap. |
+| `ANALYSIS_TTL_SECONDS` | `0` | Time-based retention; `0` disables TTL expiry. |
 | `RATE_LIMIT_ENABLED` | `true` | Per-client limits on POST endpoints. |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window. |
 | `RATE_LIMIT_ANALYSIS_START_MAX` | `10` | analyze+upload per window, per client. |
 | `RATE_LIMIT_CHAT_MAX` | `30` | chat questions per window, per client. |
+| `TRUSTED_PROXY_HOPS` | `0` | Trusted proxy hops for client-IP rate limiting. |
+| `REQUIRE_OWNER_TOKEN` | `false` | Require `X-Owner-Token` on analysis-scoped endpoints. |
 
 Never commit real secrets. `.env.example` holds placeholders only.
 

@@ -24,6 +24,10 @@ services:
       # Render terminates TLS at one proxy in front of the app.
       - key: TRUSTED_PROXY_HOPS
         value: "1"
+      # Require the per-analysis owner token once the frontend is deployed with
+      # owner-token header support.
+      - key: REQUIRE_OWNER_TOKEN
+        value: "true"
       # Set to the deployed frontend origin(s), comma-separated (CORS allowlist).
       - key: FRONTEND_ORIGIN
         sync: false

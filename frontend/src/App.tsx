@@ -132,6 +132,7 @@ function App() {
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisSummaryResponse | null>(demoModeEnabled ? demoAnalysis : null);
+  const [ownerToken, setOwnerToken] = useState<string | null>(null);
   const [architecture, setArchitecture] = useState<ArchitectureResponse | null>(demoModeEnabled ? demoArchitecture : null);
   const [findings, setFindings] = useState<FindingsResponse | null>(demoModeEnabled ? demoFindings : null);
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(demoModeEnabled ? demoRoadmap : null);
@@ -145,6 +146,7 @@ function App() {
   const resetWorkspace = () => {
     setView("overview");
     setAnalysis(null);
+    setOwnerToken(null);
     setArchitecture(null);
     setFindings(null);
     setRoadmap(null);
@@ -157,6 +159,7 @@ function App() {
 
   const loadDemo = () => {
     setAnalysis(demoAnalysis);
+    setOwnerToken(null);
     setArchitecture(demoArchitecture);
     setFindings(demoFindings);
     setRoadmap(demoRoadmap);
@@ -166,12 +169,12 @@ function App() {
     setSubmitError(null);
   };
 
-  const loadAnalysisDetails = async (analysisId: string, summary: AnalysisSummaryResponse) => {
+  const loadAnalysisDetails = async (analysisId: string, summary: AnalysisSummaryResponse, token?: string | null) => {
     const results = await Promise.allSettled([
-      api.getArchitecture(analysisId),
-      api.getFindings(analysisId),
-      api.getRoadmap(analysisId),
-      api.getReport(analysisId),
+      api.getArchitecture(analysisId, token),
+      api.getFindings(analysisId, token),
+      api.getRoadmap(analysisId, token),
+      api.getReport(analysisId, token),
     ]);
     const [architectureResult, findingsResult, roadmapResult, reportResult] = results;
     if (architectureResult.status === "fulfilled") setArchitecture(architectureResult.value);
@@ -181,15 +184,15 @@ function App() {
     setAnalysis(summary);
   };
 
-  const pollAnalysis = async (analysisId: string) => {
+  const pollAnalysis = async (analysisId: string, token?: string | null) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
-      const result = await api.getAnalysis(analysisId);
+      const result = await api.getAnalysis(analysisId, token);
       const mappedStage = mapBackendStage(result.stage);
       if (mappedStage) setProgressStage(mappedStage);
       if (result.status === "failed") throw new Error(result.error?.message ?? "The repository analysis failed. Please try again.");
       if (result.status === "completed") {
         setProgressStage("complete");
-        await loadAnalysisDetails(analysisId, result);
+        await loadAnalysisDetails(analysisId, result, token);
         setView("overview");
         setIsSubmitting(false);
         return;
@@ -223,8 +226,10 @@ function App() {
     setView("progress");
     try {
       const start = sourceMode === "github" ? await api.startGithub(githubUrl.trim()) : await api.uploadZip(zipFile as File);
+      const token = start.owner_token ?? null;
+      setOwnerToken(token);
       setAnalysis(start);
-      await pollAnalysis(start.analysis_id);
+      await pollAnalysis(start.analysis_id, token);
     } catch (error) {
       setSubmitError(getErrorMessage(error));
       setIsSubmitting(false);
@@ -244,7 +249,7 @@ function App() {
     if (!confirmed) return;
     setIsDeleting(true);
     try {
-      if (!isDemo) await api.deleteAnalysis(analysis.analysis_id);
+      if (!isDemo) await api.deleteAnalysis(analysis.analysis_id, ownerToken);
       resetWorkspace();
     } catch (error) {
       setSubmitError(getErrorMessage(error));
@@ -288,7 +293,7 @@ function App() {
         {view === "architecture" && <ArchitectureView analysis={analysis} architecture={architecture} />}
         {view === "findings" && <FindingsView findings={findings} />}
         {view === "roadmap" && <RoadmapView roadmap={roadmap} findings={findings} />}
-        {view === "chat" && <ChatView analysisId={analysis.analysis_id} isDemo={isDemo} />}
+        {view === "chat" && <ChatView analysisId={analysis.analysis_id} ownerToken={ownerToken} isDemo={isDemo} />}
         {view === "report" && <ReportView analysis={analysis} architecture={architecture} findings={findings} roadmap={roadmap} report={report} />}
       </main>
     </div>
@@ -482,7 +487,7 @@ function RoadmapTaskCard({ task, index, findings }: { task: NonNullable<RoadmapR
   return <article className={`roadmap-task-card ${open ? "open" : ""}`}><button onClick={() => setOpen(!open)} className="roadmap-task-header" aria-expanded={open}><span className="task-index">{String(index + 1).padStart(2, "0")}</span><span className="task-title-wrap"><strong>{task.title}</strong><span>{task.estimated_complexity} complexity · {task.related_finding_ids.length} related signal{task.related_finding_ids.length === 1 ? "" : "s"}</span></span><ChevronDown size={16} className={open ? "rotated" : ""} /></button>{open && <div className="roadmap-task-detail"><p>{task.description}</p><div className="related-files">{task.related_files.map((file) => <span key={file}><FileCode2 size={12} /> {file}</span>)}</div>{task.related_finding_ids.length > 0 && <div className="related-findings"><span>Related evidence</span>{task.related_finding_ids.map((id) => { const finding = findings?.items.find((item) => item.id === id); return <span className="related-finding-chip" key={id}>{finding?.title ?? id}</span>; })}</div>}</div>}</article>;
 }
 
-function ChatView({ analysisId, isDemo }: { analysisId: string; isDemo: boolean }) {
+function ChatView({ analysisId, ownerToken, isDemo }: { analysisId: string; ownerToken: string | null; isDemo: boolean }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<ChatResponse | null>(isDemo ? demoChat : null);
   const [isLoading, setIsLoading] = useState(false);
@@ -493,7 +498,7 @@ function ChatView({ analysisId, isDemo }: { analysisId: string; isDemo: boolean 
     const value = (suggestedQuestion ?? question).trim();
     if (!value || isLoading) return;
     setIsLoading(true); setError(null);
-    try { setAnswer(isDemo ? demoChat : await api.askQuestion(analysisId, value)); setQuestion(""); } catch (err) { setError(getErrorMessage(err)); } finally { setIsLoading(false); }
+    try { setAnswer(isDemo ? demoChat : await api.askQuestion(analysisId, value, ownerToken)); setQuestion(""); } catch (err) { setError(getErrorMessage(err)); } finally { setIsLoading(false); }
   };
   return <div className="workspace-page chat-page"><WorkspaceHeader eyebrow="Repository-grounded answers" title="Codebase chat" description="Ask a question and get an answer anchored to the files RepoRevive inspected." actions={<span className="confidence-note"><MessageSquareText size={14} /> Citations required</span>} /><div className="chat-layout"><section className="panel chat-panel"><div className="chat-panel-header"><div className="assistant-avatar"><OrbitSpark /></div><div><strong>RepoRevive assistant</strong><span>Grounded in inspected repository context</span></div><span className="online-indicator"><span className="status-dot" /> ready</span></div>{answer ? <div className="answer-card"><div className="answer-label"><Sparkles size={14} /> Analysis answer <span>{Math.round(answer.confidence * 100)}% confidence</span></div><p>{answer.answer}</p>{answer.insufficient_evidence && <div className="insufficient-note"><CircleAlert size={14} /> The repository did not provide enough evidence to make this claim confidently.</div>}{answer.citations.length > 0 && <div className="citation-list"><div className="citation-heading">Source citations</div>{answer.citations.map((citation, index) => <div className="citation-item" key={`${citation.file}-${index}`}><span className="citation-number">0{index + 1}</span><div><strong>{citation.file}{citation.line ? `:${citation.line}` : ""}</strong><code>{citation.excerpt}</code></div><ExternalLink size={14} /></div>)}</div>}</div> : <div className="chat-empty"><div className="chat-empty-orbit"><OrbitSpark /></div><h2>Ask the repository a question.</h2><p>Try one of the prompts below, or ask about a file, flow, risk, or next step.</p><div className="suggested-list">{suggestedQuestions.map((item) => <button onClick={() => void ask(undefined, item)} key={item}>{item}<ArrowUpRight size={14} /></button>)}</div></div>}{error && <div className="chat-error"><AlertCircle size={14} /> {error}</div>}<form className="chat-input-row" onSubmit={ask}><input aria-label="Ask a repository question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask about a file, flow, or finding..." /><button type="submit" disabled={isLoading || !question.trim()} aria-label="Send question">{isLoading ? <RefreshCw className="spin" size={17} /> : <Send size={17} />}</button></form></section><aside className="chat-aside"><div className="panel chat-guidance"><div className="panel-eyebrow">Good questions look like</div><h2>Specific, source-shaped, useful.</h2><div className="guidance-list"><Guidance icon={<FileCode2 size={15} />} text="Why is this file involved in the deployment issue?" /><Guidance icon={<GitBranch size={15} />} text="Where does the frontend call this backend route?" /><Guidance icon={<Route size={15} />} text="What should I do before I add a new feature?" /></div></div><div className="panel privacy-card"><LockKeyhole size={16} /><strong>Grounding boundary</strong><p>Answers can only use context retrieved from this analysis. When evidence is thin, the assistant says so.</p></div></aside></div></div>;
 }

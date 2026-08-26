@@ -144,6 +144,7 @@ export interface AnalysisStartResponse {
   analysis_id: string;
   status: AnalysisStatus;
   repository: RepositoryIdentity;
+  owner_token?: string | null;
 }
 
 export interface ApiErrorShape {

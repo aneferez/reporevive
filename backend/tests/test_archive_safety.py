@@ -78,6 +78,13 @@ def test_extracted_size_limit_enforced():
     assert exc.value.code == "ARCHIVE_TOO_LARGE"
 
 
+def test_archive_entry_count_limit_enforced():
+    data = make_zip({f"f{i}.txt": b"data" for i in range(3)})
+    with pytest.raises(PipelineError) as exc:
+        extract_zip(data, _settings(max_archive_entries=2))
+    assert exc.value.code == "ARCHIVE_TOO_LARGE"
+
+
 def test_oversize_individual_file_is_skipped():
     data = make_zip({"big.txt": b"x" * 100, "small.txt": b"ok"})
     result = extract_zip(data, _settings(max_file_bytes=10))

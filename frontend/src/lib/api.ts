@@ -9,6 +9,7 @@ import type {
 } from "../types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const OWNER_TOKEN_HEADER = "X-Owner-Token";
 
 export class ApiError extends Error {
   code?: string;
@@ -22,7 +23,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, ownerToken?: string | null): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -30,6 +31,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: {
         ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
+        ...(ownerToken ? { [OWNER_TOKEN_HEADER]: ownerToken } : {}),
       },
     });
   } catch {
@@ -64,35 +66,35 @@ export const api = {
     });
   },
 
-  getAnalysis(analysisId: string) {
-    return request<AnalysisSummaryResponse>(`/api/analysis/${encodeURIComponent(analysisId)}`);
+  getAnalysis(analysisId: string, ownerToken?: string | null) {
+    return request<AnalysisSummaryResponse>(`/api/analysis/${encodeURIComponent(analysisId)}`, undefined, ownerToken);
   },
 
-  getArchitecture(analysisId: string) {
-    return request<ArchitectureResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/architecture`);
+  getArchitecture(analysisId: string, ownerToken?: string | null) {
+    return request<ArchitectureResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/architecture`, undefined, ownerToken);
   },
 
-  getFindings(analysisId: string) {
-    return request<FindingsResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/findings`);
+  getFindings(analysisId: string, ownerToken?: string | null) {
+    return request<FindingsResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/findings`, undefined, ownerToken);
   },
 
-  getRoadmap(analysisId: string) {
-    return request<RoadmapResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/roadmap`);
+  getRoadmap(analysisId: string, ownerToken?: string | null) {
+    return request<RoadmapResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/roadmap`, undefined, ownerToken);
   },
 
-  askQuestion(analysisId: string, question: string) {
+  askQuestion(analysisId: string, question: string, ownerToken?: string | null) {
     return request<ChatResponse>(`/api/analysis/${encodeURIComponent(analysisId)}/chat`, {
       method: "POST",
       body: JSON.stringify({ question }),
-    });
+    }, ownerToken);
   },
 
-  getReport(analysisId: string) {
-    return request<AnalysisReport>(`/api/analysis/${encodeURIComponent(analysisId)}/report`);
+  getReport(analysisId: string, ownerToken?: string | null) {
+    return request<AnalysisReport>(`/api/analysis/${encodeURIComponent(analysisId)}/report`, undefined, ownerToken);
   },
 
-  deleteAnalysis(analysisId: string) {
-    return request<void>(`/api/analysis/${encodeURIComponent(analysisId)}`, { method: "DELETE" });
+  deleteAnalysis(analysisId: string, ownerToken?: string | null) {
+    return request<void>(`/api/analysis/${encodeURIComponent(analysisId)}`, { method: "DELETE" }, ownerToken);
   },
 };
 

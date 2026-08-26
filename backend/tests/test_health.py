@@ -9,6 +9,9 @@ def test_health_ok(client):
     assert "version" in body
     assert body["ai_enabled"] is False  # no key configured in tests
     assert resp.headers.get("X-Request-ID")
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["X-Frame-Options"] == "DENY"
+    assert resp.headers["Referrer-Policy"] == "no-referrer"
 
 
 def test_openapi_available(client):

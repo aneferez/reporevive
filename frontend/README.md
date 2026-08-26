@@ -41,3 +41,11 @@ DELETE /api/analysis/{analysis_id}
 ```
 
 The client treats the analysis service as authoritative for live data and uses the sample fixtures only after the user explicitly selects the sample path.
+
+## Analysis ownership
+
+The backend returns a one-time `owner_token` when a live analysis starts. The
+frontend keeps that token in memory and automatically sends it as the
+`X-Owner-Token` header on status, result, chat, and delete requests. Sample mode
+does not use an owner token. If the browser is refreshed, the in-memory token is
+lost and the user must start a new analysis.

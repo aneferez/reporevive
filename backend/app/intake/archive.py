@@ -47,8 +47,10 @@ def extract_zip(data: bytes, settings: Settings) -> IntakeResult:
         ) from exc
 
     with zf:
+        infos = zf.infolist()
+        _validate_entry_count(len(infos), settings)
         entries: list[_RawEntry] = []
-        for info in zf.infolist():
+        for info in infos:
             if info.is_dir():
                 continue
             entries.append(
@@ -71,8 +73,10 @@ def extract_tar_gz(data: bytes, settings: Settings) -> IntakeResult:
         ) from exc
 
     with tf:
+        members = tf.getmembers()
+        _validate_entry_count(len(members), settings)
         entries = []
-        for member in tf.getmembers():
+        for member in members:
             if member.isdir():
                 continue
             is_symlink = member.issym() or member.islnk()
@@ -92,6 +96,14 @@ def extract_tar_gz(data: bytes, settings: Settings) -> IntakeResult:
 # ---------------------------------------------------------------------------
 # Shared ingestion
 # ---------------------------------------------------------------------------
+
+
+def _validate_entry_count(count: int, settings: Settings) -> None:
+    if count > settings.max_archive_entries:
+        raise PipelineError(
+            ErrorCode.ARCHIVE_TOO_LARGE,
+            "The archive contains too many entries and was rejected.",
+        )
 
 
 def _ingest(entries: list[_RawEntry], settings: Settings) -> IntakeResult:

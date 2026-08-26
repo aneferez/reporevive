@@ -48,8 +48,10 @@ The Blueprint lives at the repo root: [`render.yaml`](render.yaml).
 3. Set the env vars marked `sync: false` in the dashboard:
    - `GEMINI_API_KEY` — your key (leave blank for deterministic-only).
    - `FRONTEND_ORIGIN` — fill in **after** step 3 (the frontend URL).
-   - `GITHUB_TOKEN` — optional; public repos only.
-   - (`GEMINI_MODEL`, `EMBEDDING_MODEL`, `RETRIEVAL_MODE` have sensible defaults;
+    - `GITHUB_TOKEN` — optional; public repos only.
+    - `REQUIRE_OWNER_TOKEN=true` — enabled by the provided Blueprint; the frontend
+      keeps the per-analysis token in memory and sends it on scoped requests.
+    - (`GEMINI_MODEL`, `EMBEDDING_MODEL`, `RETRIEVAL_MODE` have sensible defaults;
      set `RETRIEVAL_MODE=embeddings` for semantic chat — it uses AI quota.)
 4. Deploy. Note the backend URL, e.g. `https://reporevive-backend.onrender.com`.
 
