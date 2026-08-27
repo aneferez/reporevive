@@ -85,17 +85,30 @@ pytest
 
 ## Evaluation
 
-A benchmark harness runs 5 synthetic sample repositories through the real
-pipeline and checks 29 intentionally-introduced scenarios (stack detection,
-precision/false-positives, config, API mismatches, secrets + redaction, intake
-safety, and chat behavior), then reports metrics:
+A benchmark harness runs 12 synthetic sample repositories through the real
+pipeline and checks **63 intentionally-introduced scenarios**, then reports
+metrics:
 
 ```bash
 python -m evaluation.run_eval
 ```
 
+Current outcome: **63/63 (100%)**. Coverage by group:
+
+| Group | Checks | What it verifies |
+| --- | --- | --- |
+| `stack` | 18 | Detection of React, Vue, Vite, TypeScript, FastAPI, Flask, Django, Express/Node, Prisma, and the Postgres/MongoDB/Pytest/Vitest/Jest/Cypress signals |
+| `precision` | 6 | A healthy/fully-configured repo raises no false test/docs/deploy/config/secret findings |
+| `findings` | 21 | API mismatches (method + missing route), config gaps, dependency conflicts, and 8 secret kinds (AWS, GitHub, Google, Slack, Stripe, private key, JWT, generic) |
+| `redaction` | 2 | Raw secret values never survive in stored content |
+| `roadmap` | 5 | Findings map to the right recovery buckets, in priority order (FR-10) |
+| `architecture` | 5 | Component/connection graph with the PRD `persistence` taxonomy and no phantom nodes (FR-04) |
+| `intake` | 3 | Unsupported URLs, oversized archives, and path traversal are rejected |
+| `chat` | 3 | Insufficient-evidence honesty, structured AI-failure errors, and cited answers on the offline path (FR-11) |
+
 Results are written to `evaluation/results/latest.json`. The same checks run in
-CI via `tests/test_evaluation.py` and must stay at 100%.
+CI via `tests/test_evaluation.py`, which enforces a ≥25-scenario floor (PRD
+§17 / DoD #9) and a 100% pass rate.
 
 ## Deployment
 
