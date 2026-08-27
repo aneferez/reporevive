@@ -24,7 +24,7 @@ export const demoAnalysis: AnalysisSummaryResponse = {
   summary: {
     files_analyzed: 86,
     analysis_duration_ms: 6840,
-    findings_by_severity: { critical: 0, high: 2, medium: 4, low: 3 },
+    findings_by_severity: { critical: 0, high: 2, medium: 4, low: 3, info: 0 },
     readiness_label: "needs_attention",
   },
   created_at: "2026-08-24T06:30:00Z",

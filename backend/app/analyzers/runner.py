@@ -33,7 +33,7 @@ def compute_readiness(findings: list[Finding]) -> str:
 def build_overview(
     files_analyzed: int, stack: StackInfo, findings: list[Finding], truncated: bool
 ) -> str:
-    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
         if f.severity.value in counts:
             counts[f.severity.value] += 1

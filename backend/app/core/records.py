@@ -99,7 +99,7 @@ class AnalysisRecord:
         return max(0, int((end - start).total_seconds() * 1000))
 
     def summary(self) -> AnalysisSummary:
-        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
         for finding in self.findings:
             key = finding.severity.value
             if key in counts:

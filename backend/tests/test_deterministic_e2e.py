@@ -54,6 +54,9 @@ def test_broken_repo_produces_expected_findings(client):
     severities = [f["severity"] for f in findings]
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     assert severities == sorted(severities, key=lambda s: order[s])
+    counts = summary["summary"]["findings_by_severity"]
+    assert set(counts) == set(order)
+    assert sum(counts.values()) == len(findings)
 
     # Every finding carries evidence-backed structure.
     for f in findings:

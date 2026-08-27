@@ -77,13 +77,13 @@ const progressStages: Array<{ id: ProgressStage; label: string; hint: string }> 
 ];
 
 const progressOrder = progressStages.map((stage) => stage.id);
-const severityCountKeys: (keyof SeverityCounts)[] = ["critical", "high", "medium", "low"];
+const severityCountKeys: (keyof SeverityCounts)[] = ["critical", "high", "medium", "low", "info"];
 const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 const WORKSPACE_SESSION_KEY = "reporevive.workspace.session";
 const demoSummary = demoAnalysis.summary ?? {
   files_analyzed: 0,
   analysis_duration_ms: 0,
-  findings_by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+  findings_by_severity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
   readiness_label: "unknown",
 };
 const demoStack = demoAnalysis.stack ?? { frontend: [], backend: [], database: [], testing: [] };
@@ -506,7 +506,7 @@ function WorkspaceHeader({ eyebrow, title, description, actions }: { eyebrow: st
 function OverviewView({ analysis, findings, architecture, onNavigate, onDelete, isDeleting }: { analysis: AnalysisSummaryResponse; findings: FindingsResponse | null; architecture: ArchitectureResponse | null; onNavigate: (view: WorkspaceView) => void; onDelete: () => void; isDeleting: boolean }) {
   const summary = analysis.summary;
   const stack = analysis.stack;
-  const counts = summary?.findings_by_severity ?? { critical: 0, high: 0, medium: 0, low: 0 };
+  const counts = summary?.findings_by_severity ?? { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   const totalFindings = findings?.total ?? Object.values(counts).reduce((sum, count) => sum + count, 0);
   return <div className="workspace-page">
     <WorkspaceHeader eyebrow="Analysis overview" title={analysis.repository.name} description={`${analysis.repository.source_type === "github" ? "Public GitHub repository" : "Uploaded ZIP archive"} · analyzed ${formatDate(analysis.completed_at ?? analysis.created_at)}`} actions={<><button className="secondary-button" onClick={() => onNavigate("report")}><FileText size={15} /> View report</button><button className="icon-button border-button" onClick={onDelete} disabled={isDeleting} aria-label="Delete analysis"><Trash2 size={16} /></button></>} />

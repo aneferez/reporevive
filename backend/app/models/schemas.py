@@ -43,6 +43,7 @@ class FindingsBySeverity(BaseModel):
     high: int = 0
     medium: int = 0
     low: int = 0
+    info: int = 0
 
 
 class AnalysisSummary(BaseModel):

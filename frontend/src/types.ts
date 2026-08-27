@@ -32,6 +32,7 @@ export interface SeverityCounts {
   high: number;
   medium: number;
   low: number;
+  info: number;
 }
 
 export interface AnalysisSummary {
