@@ -22,7 +22,9 @@ describe("RepoRevive client", () => {
 
     expect(screen.getByRole("heading", { name: "atlas-workbench" })).toBeInTheDocument();
     expect(screen.getByText("Sample analysis")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "57% readiness heuristic based on 9 findings" })).toBeInTheDocument();
+    const readinessRing = screen.getByRole("img", { name: "57% readiness heuristic based on 9 findings" });
+    expect(readinessRing).toBeInTheDocument();
+    expect(readinessRing.querySelector(".readiness-ring-progress")).toHaveAttribute("stroke-dashoffset");
     expect(screen.getAllByText("09")).toHaveLength(2);
 
     await user.click(screen.getAllByRole("button", { name: /findings/i })[0]);
