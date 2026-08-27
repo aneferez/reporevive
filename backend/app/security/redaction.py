@@ -145,6 +145,12 @@ def redact_text(text: str) -> tuple[str, list[SecretHit]]:
                 in_key_block = False
             continue
         if _PRIVATE_KEY_BEGIN.search(line):
+            if _looks_like_placeholder(line):
+                # A BEGIN-PRIVATE-KEY line that is itself an example or redaction
+                # marker (docs, or a redaction library's own mask string like
+                # "-----BEGIN PRIVATE KEY----- (redacted)") is not a real key.
+                out_lines.append(line)
+                continue
             hits.append(
                 SecretHit(
                     kind="private_key_block",

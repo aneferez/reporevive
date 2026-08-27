@@ -92,3 +92,24 @@ def test_env_secret_from_code_getenv_not_flagged():
     text = 'SECRET_TOKEN = os.getenv("SECRET_TOKEN")\n'
     _redacted, hits = redact_text(text)
     assert all(h.kind != "env_secret_assignment" for h in hits)
+
+
+def test_redacts_real_private_key_block():
+    # A genuine PEM block is still fully redacted and flagged.
+    text = (
+        "-----BEGIN PRIVATE KEY-----\n"
+        "MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEA\n"
+        "-----END PRIVATE KEY-----\n"
+    )
+    redacted, hits = redact_text(text)
+    assert "MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEA" not in redacted
+    assert any(h.kind == "private_key_block" for h in hits)
+
+
+def test_private_key_marker_line_not_flagged():
+    # A redaction/example marker (e.g. a redaction library's own mask string) is
+    # not a real key exposure and must not be flagged.
+    text = 'mask = "-----BEGIN PRIVATE KEY----- (redacted)"\n'
+    redacted, hits = redact_text(text)
+    assert all(h.kind != "private_key_block" for h in hits)
+    assert redacted.strip() == text.strip()  # line kept as-is, not redacted
