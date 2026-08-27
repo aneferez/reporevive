@@ -105,6 +105,43 @@ browser call the API (the backend only allows the configured origins).
 - Open the frontend, submit a public GitHub URL or a ZIP, and confirm the
   dashboard, findings, roadmap, and chat render from real responses.
 
+### 5a. Owner-token enforcement (when `REQUIRE_OWNER_TOKEN=true`)
+
+Start an analysis and capture the one-time `owner_token`, then confirm scoped
+reads are gated:
+
+```bash
+curl -s -X POST https://<backend>/api/repositories/analyze \
+  -H 'content-type: application/json' \
+  -d '{"repository_url":"https://github.com/<owner>/<repo>"}'
+# → { "analysis_id": "analysis_…", "owner_token": "…secret…", … }
+```
+```bash
+# No header → 403 OWNER_TOKEN_INVALID
+curl -s -o /dev/null -w '%{http_code}\n' https://<backend>/api/analysis/<id>/findings
+# Correct header → 200
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H 'X-Owner-Token: <owner_token>' https://<backend>/api/analysis/<id>/findings
+```
+
+Expect `403` then `200`. (A *different* analysis's token must also return `403` —
+that isolation guarantee is covered by `tests/test_ownership.py`.)
+
+### 5b. pgvector retrieval (optional, when using a database)
+
+If you provisioned Postgres+pgvector (e.g. Supabase) and want semantic chat,
+set both `DATABASE_URL` and `RETRIEVAL_MODE=pgvector` on the backend service.
+Validate the database from `backend/` first — the live integration test is
+skipped unless `DATABASE_URL` is set, uses an isolated throwaway table, and
+needs no AI key:
+
+```bash
+DATABASE_URL='postgres://…' pytest tests/test_pgvector_live.py -v
+```
+
+Expect one passing test (build → search → cleanup). Without `RETRIEVAL_MODE=pgvector`
+the backend stays on the default lexical retriever and chat still works.
+
 ---
 
 ## Notes and gotchas
