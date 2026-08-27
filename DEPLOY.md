@@ -14,8 +14,8 @@ environment variables, so it deploys cleanly to free tiers.
 ## 0. Prerequisites
 
 - A GitHub account and an empty repo to push to.
-- A Render account (or another Python host) for the backend.
-- A static host (Vercel / Netlify / Render) for the frontend.
+- A Render account — one Blueprint deploys **both** services (backend web
+  service + frontend static site).
 - Optional: a Gemini API key (for AI chat/narration/embeddings). Without it the
   backend runs deterministic-only.
 
@@ -37,25 +37,34 @@ git push -u origin main
 
 ---
 
-## 2. Deploy the backend (Render Blueprint)
+## 2. Deploy both services (Render Blueprint)
 
-The Blueprint lives at the repo root: [`render.yaml`](render.yaml).
+The Blueprint lives at the repo root: [`render.yaml`](render.yaml). It defines
+**two** services:
+
+| Service | Type | Root | Serves |
+| --- | --- | --- | --- |
+| `reporevive-backend` | web (python) | `backend` | FastAPI API, health check `/health` |
+| `reporevive-frontend` | static | `frontend` | Vite build (`dist`), SPA rewrite to `/index.html` |
 
 1. Render dashboard → **New → Blueprint** → connect the GitHub repo.
-2. Render reads `render.yaml` and provisions the `reporevive-backend` web service
-   (`rootDir: backend`, health check `/health`). The build installs both
-   `requirements.txt` and `requirements-ai.txt` so AI works in production.
-3. Set the env vars marked `sync: false` in the dashboard:
-   - `GEMINI_API_KEY` — your key (leave blank for deterministic-only).
-   - `FRONTEND_ORIGIN` — fill in **after** step 3 (the frontend URL).
-    - `GITHUB_TOKEN` — optional; public repos only.
-    - `REQUIRE_OWNER_TOKEN=true` — enabled by the provided Blueprint; the frontend
-      keeps the per-analysis token in memory and sends it on scoped requests.
-    - (`GEMINI_MODEL`, `EMBEDDING_MODEL`, `RETRIEVAL_MODE` have sensible defaults;
-     set `RETRIEVAL_MODE=embeddings` for semantic chat — it uses AI quota.)
-4. Deploy. Note the backend URL, e.g. `https://reporevive-backend.onrender.com`.
+2. Render reads `render.yaml` and provisions both services. The backend build
+   installs `requirements.txt` + `requirements-ai.txt` (AI works in production);
+   the frontend build runs `npm ci --include=dev && npm run build`.
+3. Set the env vars marked `sync: false` when prompted:
+   - **Backend** `GEMINI_API_KEY` — your key (leave blank for deterministic-only).
+   - **Backend** `GITHUB_TOKEN` — optional; public repos only.
+   - **Backend** `FRONTEND_ORIGIN` and **frontend** `VITE_API_BASE_URL` — leave
+     these for **step 3** (each needs the other service's URL).
+   - `REQUIRE_OWNER_TOKEN=true` is preset; the frontend sends the per-analysis
+     `X-Owner-Token` on scoped requests. (`GEMINI_MODEL`, `EMBEDDING_MODEL`,
+     `RETRIEVAL_MODE` have sensible defaults; `RETRIEVAL_MODE=embeddings` gives
+     semantic chat but uses AI quota.)
+4. Apply. Note both public URLs, e.g.
+   `https://reporevive-backend.onrender.com` and
+   `https://reporevive-frontend.onrender.com`.
 
-**Docker alternative** (Railway / Fly / any container host):
+**Docker alternative** for the backend (Railway / Fly / any container host):
 
 ```bash
 docker build -t reporevive-backend backend
@@ -68,33 +77,18 @@ The container respects the platform's `$PORT` and defaults to 8000.
 
 ---
 
-## 3. Deploy the frontend
+## 3. Connect the two (set the cross-referencing URLs)
 
-The frontend is a standard Vite app: build with `npm run build` → output in
-`frontend/dist`. On Vercel/Netlify/Render, set the project root to `frontend`.
+The browser reaches the backend over its **public** URL, so these two values are
+set by hand after the first deploy, then each service redeploys:
 
-- **Build command:** `npm ci && npm run build`
-- **Publish/output directory:** `dist`
-- **Env var:** `VITE_API_BASE_URL` = the backend URL from step 2.
+- **Frontend** `VITE_API_BASE_URL` = the backend URL from step 2. This is baked
+  in at **build time**, so saving it triggers a rebuild of the static site.
+- **Backend** `FRONTEND_ORIGIN` = the frontend URL from step 2 (comma-separated
+  if several). This is the CORS allowlist — the backend only answers browsers
+  from these origins. Saving it redeploys the backend.
 
-> `VITE_*` vars are baked in at **build time**, so set `VITE_API_BASE_URL` before
-> building. If you change it later, rebuild the frontend.
->
-> For SPA routing, add a catch-all rewrite to `/index.html` (Vercel/Netlify do
-> this automatically for Vite; on Render add a rewrite rule `/* → /index.html`).
-
-Note the frontend URL, e.g. `https://reporevive.vercel.app`.
-
----
-
-## 4. Wire CORS (connect the two)
-
-Back in the backend host, set:
-
-- `FRONTEND_ORIGIN` = the frontend URL from step 3 (comma-separated if several).
-
-Redeploy the backend so it picks up the new origin. This is what lets the
-browser call the API (the backend only allows the configured origins).
+Wait for both redeploys to finish before verifying.
 
 ---
 

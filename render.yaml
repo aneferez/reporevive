@@ -1,10 +1,14 @@
-# Render Blueprint for the RepoRevive backend.
+# Render Blueprint for RepoRevive (backend web service + frontend static site).
 #
 # Render reads a Blueprint named `render.yaml` at the REPOSITORY ROOT (here).
 # Deploy: Render dashboard -> New -> Blueprint -> connect this repo.
 #
-# The frontend is deployed separately (Vercel / Netlify / Render static site) by
-# the frontend owner; see DEPLOY.md for the full flow and how to wire the two.
+# Two services deploy together. Because the browser talks to the backend over
+# its PUBLIC URL (fromService only exposes private hostnames), the two
+# cross-referencing values are set by hand after the first deploy, then redeploy:
+#   * backend  FRONTEND_ORIGIN   = the frontend's public URL (CORS allowlist)
+#   * frontend VITE_API_BASE_URL = the backend's public URL (baked in at build)
+# See DEPLOY.md for the full step-by-step.
 services:
   - type: web
     name: reporevive-backend
@@ -43,4 +47,23 @@ services:
         value: lexical
       # Optional, public repos only; raises GitHub's anonymous rate limit.
       - key: GITHUB_TOKEN
+        sync: false
+
+  # Frontend: static Vite build served by Render. Paths are relative to rootDir.
+  - type: web
+    name: reporevive-frontend
+    runtime: static
+    rootDir: frontend
+    # --include=dev forces devDependencies (tsc/vite) even if NODE_ENV=production.
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: dist
+    # SPA fallback so client-side routes resolve to index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Baked in at BUILD time. Set to the backend's public URL (from the
+      # backend service above), then trigger a manual redeploy of this site.
+      - key: VITE_API_BASE_URL
         sync: false
