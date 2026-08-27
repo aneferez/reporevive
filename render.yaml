@@ -57,13 +57,29 @@ services:
     # --include=dev forces devDependencies (tsc/vite) even if NODE_ENV=production.
     buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: dist
-    # SPA fallback so client-side routes resolve to index.html.
+    # Single-origin setup: proxy API traffic to the backend so the whole app is
+    # served from ONE URL (no CORS). Order matters — specific proxies first, the
+    # SPA fallback last. The backend's public URL is hardcoded here; update it if
+    # the backend is recreated with a different name/suffix.
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://reporevive-backend-6twt.onrender.com/api/*
+      - type: rewrite
+        source: /health
+        destination: https://reporevive-backend-6twt.onrender.com/health
+      - type: rewrite
+        source: /docs
+        destination: https://reporevive-backend-6twt.onrender.com/docs
+      - type: rewrite
+        source: /openapi.json
+        destination: https://reporevive-backend-6twt.onrender.com/openapi.json
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      # Baked in at BUILD time. Set to the backend's public URL (from the
-      # backend service above), then trigger a manual redeploy of this site.
+      # Same-origin: point this at the FRONTEND's OWN public URL so the app calls
+      # /api on this origin, which the routes above proxy to the backend. Baked in
+      # at build time — redeploy this site after changing it.
       - key: VITE_API_BASE_URL
         sync: false
