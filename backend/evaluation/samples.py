@@ -168,6 +168,115 @@ REPO_VERSION_CONFLICT = {
     "Dockerfile": "FROM node:20\n",
 }
 
+# ---------------------------------------------------------------------------
+# 8. Django + PostgreSQL backend, fully configured (clean detection baseline).
+#    Exercises the Django/Python/Postgres stack path with no findings.
+# ---------------------------------------------------------------------------
+REPO_DJANGO = {
+    "backend/requirements.txt": "django\npsycopg2-binary\npytest\n",
+    "backend/manage.py": "import django\n",
+    "backend/app/urls.py": (
+        "from django.urls import path\n"
+        "urlpatterns = [path('api/health', None)]\n"
+    ),
+    "backend/app/settings.py": "import django\nDEBUG = True\n",
+    "backend/tests/test_app.py": "def test_app():\n    assert True\n",
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM python:3.12-slim\n",
+    ".env.example": "DATABASE_URL=postgres://user:pass@localhost/db\n",
+}
+
+# ---------------------------------------------------------------------------
+# 9. React + Express (Node) + MongoDB, with one API mismatch (missing route).
+#    Exercises the JS/TS backend + Mongo path and Express route parsing.
+# ---------------------------------------------------------------------------
+REPO_EXPRESS_MONGO = {
+    "frontend/package.json": (
+        '{"dependencies":{"react":"^18","react-dom":"^18"},'
+        '"devDependencies":{"vite":"^5","jest":"^29"}}'
+    ),
+    "frontend/src/api.ts": (
+        'export const listUsers = () => fetch("/api/users");\n'
+        'export const addUser = () => fetch("/api/users", { method: "POST" });\n'
+        'export const missing = () => fetch("/api/reports");\n'
+    ),
+    "backend/package.json": '{"dependencies":{"express":"^4","mongoose":"^8"}}',
+    "backend/server.js": (
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.get('/api/users', (req, res) => res.json([]));\n"
+        "app.post('/api/users', (req, res) => res.json({}));\n"
+    ),
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM node:20\n",
+}
+
+# ---------------------------------------------------------------------------
+# 10. Vue 3 + Vite frontend with Vitest + Cypress declared.
+#     Exercises Vue detection and JS test-framework detection.
+# ---------------------------------------------------------------------------
+REPO_VUE = {
+    "package.json": (
+        '{"dependencies":{"vue":"^3"},'
+        '"devDependencies":{"vite":"^5","vitest":"^1","cypress":"^13"}}'
+    ),
+    "src/App.vue": "<template><div>hi</div></template>\n",
+    "vite.config.ts": "export default {}\n",
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM node:20\n",
+}
+
+# ---------------------------------------------------------------------------
+# 11. Express + Prisma (PostgreSQL provider). Exercises Prisma provider mapping
+#     to a concrete database in the stack detector.
+# ---------------------------------------------------------------------------
+REPO_PRISMA = {
+    "package.json": (
+        '{"dependencies":{"express":"^4","@prisma/client":"^5"},'
+        '"devDependencies":{"prisma":"^5"}}'
+    ),
+    "prisma/schema.prisma": (
+        "datasource db {\n"
+        '  provider = "postgresql"\n'
+        '  url = env("DATABASE_URL")\n'
+        "}\n"
+    ),
+    "server.js": "const express = require('express');\nconst app = express();\n",
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM node:20\n",
+}
+
+# ---------------------------------------------------------------------------
+# 12. Additional dummy secret types (all fake): Stripe, Slack, Google, JWT.
+#     Broadens secret-kind detection + redaction beyond REPO_SECRETS.
+#
+#     Each value is assembled from adjacent string fragments so no complete
+#     secret-shaped literal ever appears in this source file. These are fake,
+#     but they match real credential formats, so a contiguous literal would trip
+#     GitHub secret scanning / push protection. Fragmenting keeps the repo clean
+#     while the assembled runtime strings still exercise the detector exactly.
+# ---------------------------------------------------------------------------
+_FAKE_STRIPE = "sk_" "live_" "abcdefghijklmnop1234567890"
+_FAKE_SLACK = "xox" "b-1234567890-abcdefghijklmnop"
+_FAKE_GOOGLE = "AI" "zaSyA1234567890abcdefghijklmnopqrstuv"
+_FAKE_JWT = "eyJ" "hbGciOiJIUzI1NiIs.eyJzdWIioMTIzNDU2.abcDEFghiJKLmno"
+
+REPO_MORE_SECRETS = {
+    "backend/config.py": (
+        f'STRIPE = "{_FAKE_STRIPE}"\n'
+        f'SLACK = "{_FAKE_SLACK}"\n'
+        f'GOOGLE = "{_FAKE_GOOGLE}"\n'
+        f'JWT = "{_FAKE_JWT}"\n'
+    ),
+    "backend/app/main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+    "backend/tests/test_x.py": "def test_x():\n    assert True\n",
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM python:3.12-slim\n",
+}
+
+# Raw secret strings from REPO_MORE_SECRETS that must NOT survive in stored content.
+REPO_MORE_SECRETS_RAW = [_FAKE_STRIPE, _FAKE_SLACK, _FAKE_GOOGLE, _FAKE_JWT]
+
 SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "healthy_react_fastapi": REPO_HEALTHY,
     "broken_config": REPO_BROKEN_CONFIG,
@@ -176,4 +285,9 @@ SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "bare_broken": REPO_BARE,
     "flask_mismatch": REPO_FLASK,
     "version_conflict": REPO_VERSION_CONFLICT,
+    "django_postgres": REPO_DJANGO,
+    "express_mongo": REPO_EXPRESS_MONGO,
+    "vue_vite": REPO_VUE,
+    "express_prisma": REPO_PRISMA,
+    "more_secrets": REPO_MORE_SECRETS,
 }

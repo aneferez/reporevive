@@ -30,7 +30,7 @@ from app.intake.archive import extract_zip
 from app.intake.github import parse_github_url
 
 from .harness import run_repo, zip_bytes
-from .samples import REPO_SECRETS_RAW, SAMPLE_REPOS
+from .samples import REPO_MORE_SECRETS_RAW, REPO_SECRETS_RAW, SAMPLE_REPOS
 
 
 @dataclass
@@ -78,6 +78,38 @@ def _has_finding(record: AnalysisRecord, *, category: str | None = None, title_s
 
 def _stack_has(record: AnalysisRecord, bucket: str, value: str) -> bool:
     return value in getattr(record.stack, bucket, [])
+
+
+def _priority_value(task) -> str:
+    p = task.priority
+    return p.value if hasattr(p, "value") else str(p)
+
+
+def _roadmap_has(record: AnalysisRecord, title_sub: str, *, priority: str | None = None) -> bool:
+    for t in record.roadmap:
+        if title_sub.lower() not in t.title.lower():
+            continue
+        if priority and _priority_value(t) != priority:
+            continue
+        return True
+    return False
+
+
+def _arch_component_ids(record: AnalysisRecord) -> set[str]:
+    return {c.id for c in record.architecture.components}
+
+
+def _arch_component_type(record: AnalysisRecord, component_id: str) -> str | None:
+    for c in record.architecture.components:
+        if c.id == component_id:
+            return c.type
+    return None
+
+
+def _arch_has_connection(record: AnalysisRecord, source: str, target: str) -> bool:
+    return any(
+        c.source == source and c.target == target for c in record.architecture.connections
+    )
 
 
 def evaluate() -> EvalReport:
@@ -130,6 +162,52 @@ def evaluate() -> EvalReport:
     conflict = records["version_conflict"]
     r.append(ScenarioResult("dep-version-conflict", "findings", "Conflicting dependency versions", _has_finding(conflict, title_sub="Conflicting versions")))
 
+    # --- Additional stack coverage ----------------------------------------
+    django = records["django_postgres"]
+    r.append(ScenarioResult("stack-django", "stack", "Detect Django", _stack_has(django, "backend", "Django")))
+    r.append(ScenarioResult("stack-django-python", "stack", "Detect Python (Django)", _stack_has(django, "backend", "Python")))
+    r.append(ScenarioResult("stack-django-postgres", "stack", "Detect PostgreSQL (Django)", _stack_has(django, "database", "PostgreSQL")))
+    r.append(ScenarioResult("fp-django-clean", "precision", "Fully-configured Django repo raises no findings", not django.findings))
+
+    em = records["express_mongo"]
+    r.append(ScenarioResult("stack-express", "stack", "Detect Express", _stack_has(em, "backend", "Express")))
+    r.append(ScenarioResult("stack-node", "stack", "Detect Node.js", _stack_has(em, "backend", "Node.js")))
+    r.append(ScenarioResult("stack-mongodb", "stack", "Detect MongoDB", _stack_has(em, "database", "MongoDB")))
+    r.append(ScenarioResult("stack-jest", "stack", "Detect Jest", _stack_has(em, "testing", "Jest")))
+    r.append(ScenarioResult("express-api-missing", "findings", "Express missing backend route", _has_finding(em, title_sub="no matching backend route")))
+
+    vue = records["vue_vite"]
+    r.append(ScenarioResult("stack-vue", "stack", "Detect Vue", _stack_has(vue, "frontend", "Vue")))
+    r.append(ScenarioResult("stack-vue-vite", "stack", "Detect Vite (Vue)", _stack_has(vue, "frontend", "Vite")))
+    r.append(ScenarioResult("stack-vitest", "stack", "Detect Vitest", _stack_has(vue, "testing", "Vitest")))
+    r.append(ScenarioResult("stack-cypress", "stack", "Detect Cypress", _stack_has(vue, "testing", "Cypress")))
+
+    prisma = records["express_prisma"]
+    r.append(ScenarioResult("stack-prisma-postgres", "stack", "Map Prisma provider to PostgreSQL", _stack_has(prisma, "database", "PostgreSQL")))
+
+    # --- Additional secret-kind coverage ----------------------------------
+    more = records["more_secrets"]
+    r.append(ScenarioResult("sec-stripe", "findings", "Detect Stripe secret key", _has_finding(more, title_sub="Stripe secret key")))
+    r.append(ScenarioResult("sec-slack", "findings", "Detect Slack token", _has_finding(more, title_sub="Slack token")))
+    r.append(ScenarioResult("sec-google", "findings", "Detect Google API key", _has_finding(more, title_sub="Google API key")))
+    r.append(ScenarioResult("sec-jwt", "findings", "Detect JSON Web Token", _has_finding(more, title_sub="JSON Web Token")))
+    more_clean = _redaction_clean_of(more, REPO_MORE_SECRETS_RAW)
+    r.append(ScenarioResult("sec-redaction-more", "redaction", "Stripe/Slack/Google/JWT removed from stored content", more_clean[0], more_clean[1]))
+
+    # --- Recovery roadmap (FR-10) -----------------------------------------
+    r.append(ScenarioResult("roadmap-secrets-security", "roadmap", "Secrets -> high-priority security task", _roadmap_has(sec, "Remove and rotate exposed secrets", priority="high")))
+    r.append(ScenarioResult("roadmap-api-blockers", "roadmap", "API mismatch -> blocker task", _roadmap_has(api, "Resolve API contract mismatches")))
+    r.append(ScenarioResult("roadmap-bare-quality", "roadmap", "Bare repo -> tests/docs task", _roadmap_has(bare, "Improve tests and documentation")))
+    r.append(ScenarioResult("roadmap-bare-deploy", "roadmap", "Bare repo -> deployment task", _roadmap_has(bare, "Add deployment readiness")))
+    r.append(ScenarioResult("roadmap-priority-order", "roadmap", "Roadmap lists highest priority first", bool(bare.roadmap) and _priority_value(bare.roadmap[0]) == "high"))
+
+    # --- Architecture graph (FR-04) ---------------------------------------
+    r.append(ScenarioResult("arch-healthy-components", "architecture", "Full-stack repo yields fe/be/db/deploy nodes", {"frontend", "backend", "database", "deployment"} <= _arch_component_ids(healthy)))
+    r.append(ScenarioResult("arch-persistence-type", "architecture", "DB node uses PRD 'persistence' type", _arch_component_type(healthy, "database") == "persistence"))
+    r.append(ScenarioResult("arch-fe-be-connection", "architecture", "Frontend->backend connection drawn", _arch_has_connection(healthy, "frontend", "backend")))
+    r.append(ScenarioResult("arch-be-db-connection", "architecture", "Backend->database connection drawn", _arch_has_connection(healthy, "backend", "database")))
+    r.append(ScenarioResult("arch-no-phantom-frontend", "architecture", "Backend-only repo has no frontend node", "frontend" not in _arch_component_ids(sec)))
+
     # --- Intake safety scenarios ------------------------------------------
     r.append(ScenarioResult("intake-bad-url", "intake", "Reject unsupported repo URL", _expect_apperror(lambda: parse_github_url("https://gitlab.com/a/b"), "INVALID_REPOSITORY_URL")))
     r.append(ScenarioResult("intake-oversize", "intake", "Reject oversized archive", _expect_pipeline_error(lambda: extract_zip(zip_bytes({"a.txt": "x" * 100}), Settings(max_extracted_bytes=10)), "ARCHIVE_TOO_LARGE")))
@@ -140,13 +218,19 @@ def evaluate() -> EvalReport:
     insufficient = answer_question(healthy, "quokka platypus zeppelin")
     r.append(ScenarioResult("chat-insufficient", "chat", "Insufficient evidence stated", insufficient.insufficient_evidence is True))
     r.append(ScenarioResult("chat-ai-error", "chat", "AI failure -> structured error", _chat_ai_error(healthy)))
+    grounded = answer_question(healthy, "how does the health endpoint work")
+    r.append(ScenarioResult("chat-grounded-citations", "chat", "Relevant question -> cited answer (offline)", grounded.insufficient_evidence is False and len(grounded.citations) > 0))
 
     return report
 
 
 def _redaction_clean(record: AnalysisRecord) -> tuple[bool, str]:
+    return _redaction_clean_of(record, REPO_SECRETS_RAW)
+
+
+def _redaction_clean_of(record: AnalysisRecord, raw: list[str]) -> tuple[bool, str]:
     joined = "\n".join(f.content for f in record.files)
-    leaked = [s for s in REPO_SECRETS_RAW if s in joined]
+    leaked = [s for s in raw if s in joined]
     if leaked:
         return False, f"leaked: {leaked}"
     return True, "all raw secrets removed"
@@ -214,7 +298,7 @@ def main() -> int:
         extra = f"  ({res.detail})" if res.detail and not res.passed else ""
         print(f"[{mark}] {res.group:10s} {res.id:24s} {res.description}{extra}")
     print("=" * 60)
-    for group in ("stack", "precision", "findings", "redaction", "intake", "chat"):
+    for group in ("stack", "precision", "findings", "redaction", "roadmap", "architecture", "intake", "chat"):
         p, t = report.group_rate(group)
         if t:
             print(f"  {group:10s}: {p}/{t}")
