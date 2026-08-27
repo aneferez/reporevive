@@ -19,19 +19,20 @@ interface SidebarProps {
   view: WorkspaceView;
   onNavigate: (view: WorkspaceView) => void;
   repositoryName: string;
+  findingCount: number;
   onReset: () => void;
 }
 
-const navItems: Array<{ id: WorkspaceView; label: string; icon: ReactNode; count?: string }> = [
+const navItems: Array<{ id: WorkspaceView; label: string; icon: ReactNode }> = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard size={17} /> },
   { id: "architecture", label: "Architecture", icon: <Boxes size={17} /> },
-  { id: "findings", label: "Findings", icon: <ShieldCheck size={17} />, count: "09" },
+  { id: "findings", label: "Findings", icon: <ShieldCheck size={17} /> },
   { id: "roadmap", label: "Recovery roadmap", icon: <Route size={17} /> },
   { id: "chat", label: "Codebase chat", icon: <MessageSquareText size={17} /> },
   { id: "report", label: "Report", icon: <FileText size={17} /> },
 ];
 
-export function Sidebar({ view, onNavigate, repositoryName, onReset }: SidebarProps) {
+export function Sidebar({ view, onNavigate, repositoryName, findingCount, onReset }: SidebarProps) {
   return (
     <aside className="workspace-sidebar">
       <div className="sidebar-brand">
@@ -57,7 +58,7 @@ export function Sidebar({ view, onNavigate, repositoryName, onReset }: SidebarPr
           <button key={item.id} className={`sidebar-nav-item ${view === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>
-            {item.count && <span className="nav-count">{item.count}</span>}
+            {item.id === "findings" && <span className="nav-count">{String(findingCount).padStart(2, "0")}</span>}
           </button>
         ))}
       </nav>

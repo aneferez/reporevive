@@ -22,6 +22,8 @@ describe("RepoRevive client", () => {
 
     expect(screen.getByRole("heading", { name: "atlas-workbench" })).toBeInTheDocument();
     expect(screen.getByText("Sample analysis")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "57% readiness heuristic based on 9 findings" })).toBeInTheDocument();
+    expect(screen.getAllByText("09")).toHaveLength(2);
 
     await user.click(screen.getAllByRole("button", { name: /findings/i })[0]);
     expect(screen.getByRole("heading", { name: "Findings" })).toBeInTheDocument();

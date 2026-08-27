@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -117,6 +117,47 @@ function formatDate(value?: string) {
 
 function readinessLabel(label?: string) {
   return (label ?? "unknown").replaceAll("_", " ");
+}
+
+function emptySeverityCounts(): SeverityCounts {
+  return { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+}
+
+function countFindings(items: Finding[]): SeverityCounts {
+  const counts = emptySeverityCounts();
+  for (const finding of items) {
+    if (finding.severity in counts) {
+      counts[finding.severity as keyof SeverityCounts] += 1;
+    }
+  }
+  return counts;
+}
+
+function deriveReadinessLabel(counts: SeverityCounts) {
+  if (counts.critical > 0) return "not_ready";
+  if (counts.high > 0 || counts.medium > 0) return "needs_attention";
+  return "ready";
+}
+
+function readinessScore(counts: SeverityCounts, totalFindings: number) {
+  if (totalFindings === 0) return 100;
+  const penalty = counts.critical * 24 + counts.high * 12 + counts.medium * 4 + counts.low;
+  return Math.max(0, Math.min(100, 100 - penalty));
+}
+
+function readinessDescription(counts: SeverityCounts, totalFindings: number) {
+  const urgent = counts.critical + counts.high;
+  const actionable = counts.medium + counts.low;
+  if (urgent > 0) {
+    return `${urgent} high-priority signal${urgent === 1 ? "" : "s"} need review first. Open the recovery roadmap for the next validated actions.`;
+  }
+  if (actionable > 0) {
+    return `${actionable} non-blocking signal${actionable === 1 ? "" : "s"} remain. Review the recovery roadmap to make the setup and verification reproducible.`;
+  }
+  if (totalFindings > 0) {
+    return `No blocking findings were detected. ${totalFindings} informational signal${totalFindings === 1 ? "" : "s"} remain for review.`;
+  }
+  return "No findings were detected in the completed analysis.";
 }
 
 function categoryLabel(category: string) {
@@ -378,9 +419,9 @@ function App() {
     <div className="app-shell">
       <div className={`mobile-nav-backdrop ${mobileNavOpen ? "visible" : ""}`} onClick={() => setMobileNavOpen(false)} />
       <div className={`mobile-sidebar ${mobileNavOpen ? "visible" : ""}`}>
-        <Sidebar view={view} onNavigate={navigate} repositoryName={analysis.repository.name} onReset={resetWorkspace} />
+       <Sidebar view={view} onNavigate={navigate} repositoryName={analysis.repository.name} findingCount={findings?.items.length ?? findings?.total ?? 0} onReset={resetWorkspace} />
       </div>
-      <Sidebar view={view} onNavigate={navigate} repositoryName={analysis.repository.name} onReset={resetWorkspace} />
+       <Sidebar view={view} onNavigate={navigate} repositoryName={analysis.repository.name} findingCount={findings?.items.length ?? findings?.total ?? 0} onReset={resetWorkspace} />
       <main className="workspace-main">
         <header className="workspace-topbar">
           <button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={20} /></button>
@@ -506,12 +547,16 @@ function WorkspaceHeader({ eyebrow, title, description, actions }: { eyebrow: st
 function OverviewView({ analysis, findings, architecture, onNavigate, onDelete, isDeleting }: { analysis: AnalysisSummaryResponse; findings: FindingsResponse | null; architecture: ArchitectureResponse | null; onNavigate: (view: WorkspaceView) => void; onDelete: () => void; isDeleting: boolean }) {
   const summary = analysis.summary;
   const stack = analysis.stack;
-  const counts = summary?.findings_by_severity ?? { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-  const totalFindings = findings?.total ?? Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const summaryCounts = summary?.findings_by_severity ?? emptySeverityCounts();
+  const counts = findings ? countFindings(findings.items) : summaryCounts;
+  const totalFindings = findings ? findings.items.length : Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const validatedReadiness = findings ? deriveReadinessLabel(counts) : summary?.readiness_label;
+  const score = readinessScore(counts, totalFindings);
+  const readinessStyle = { "--readiness-progress": `${score * 3.6}deg` } as CSSProperties;
   return <div className="workspace-page">
     <WorkspaceHeader eyebrow="Analysis overview" title={analysis.repository.name} description={`${analysis.repository.source_type === "github" ? "Public GitHub repository" : "Uploaded ZIP archive"} · analyzed ${formatDate(analysis.completed_at ?? analysis.created_at)}`} actions={<><button className="secondary-button" onClick={() => onNavigate("report")}><FileText size={15} /> View report</button><button className="icon-button border-button" onClick={onDelete} disabled={isDeleting} aria-label="Delete analysis"><Trash2 size={16} /></button></>} />
     <div className="repo-meta-row"><span className="completed-pill"><span className="status-dot" /> Analysis complete</span>{analysis.repository.url && <a href={analysis.repository.url} target="_blank" rel="noreferrer" className="repo-link">{analysis.repository.url.replace("https://", "")} <ExternalLink size={13} /></a>}<span className="repo-meta-spacer" /><span className="meta-label"><Clock3 size={13} /> {formatDuration(summary?.analysis_duration_ms)}</span><span className="meta-label"><FileCode2 size={13} /> {summary?.files_analyzed ?? "—"} files</span></div>
-    <section className="overview-hero-card"><div className="overview-hero-copy"><div className="signal-chip"><OrbitSpark /> Heuristic readiness signal</div><h2>{readinessLabel(summary?.readiness_label)}</h2><p>There is a clear recovery path. Start with the two high-severity signals, then make setup and verification reproducible.</p><button className="primary-button" onClick={() => onNavigate("roadmap")}>Open recovery roadmap <ArrowRight size={16} /></button></div><div className="readiness-ring"><div className="ring-glow" /><div className="ring-content"><strong>{totalFindings === 0 ? "100" : Math.max(42, 100 - counts.high * 12 - counts.medium * 4 - counts.low)}<small>%</small></strong><span>readiness<br />heuristic</span></div></div><div className="hero-card-gridline" /></section>
+     <section className="overview-hero-card"><div className="overview-hero-copy"><div className="signal-chip"><OrbitSpark /> Validated readiness signal</div><h2>{readinessLabel(validatedReadiness)}</h2><p>{readinessDescription(counts, totalFindings)}</p><button className="primary-button" onClick={() => onNavigate("roadmap")}>Open recovery roadmap <ArrowRight size={16} /></button></div><div className="readiness-ring" style={readinessStyle} role="img" aria-label={`${score}% readiness heuristic based on ${totalFindings} findings`}><div className="ring-glow" /><div className="ring-content"><strong>{score}<small>%</small></strong><span>readiness<br />heuristic</span></div></div><div className="hero-card-gridline" /></section>
     <div className="metric-grid"><MetricCard label="Files inspected" value={String(summary?.files_analyzed ?? "—")} detail="Supported source files" icon={<FileCode2 size={17} />} tone="neutral" /><MetricCard label="High priority" value={String(counts.high)} detail="Needs attention first" icon={<CircleAlert size={17} />} tone="danger" /><MetricCard label="Architecture" value={String(architecture?.components.length ?? "—")} detail="Detected components" icon={<Network size={17} />} tone="info" /><MetricCard label="Recovery tasks" value={String(roadmapCount(findings, totalFindings))} detail="Prioritized next steps" icon={<Route size={17} />} tone="success" /></div>
     <div className="overview-columns"><section className="panel stack-panel"><PanelHeading eyebrow="Detected stack" title="What the repository is built with" action={<button className="text-button" onClick={() => onNavigate("architecture")}>View architecture <ArrowRight size={14} /></button>} /><div className="stack-groups">{stack && <><StackGroup icon={<Globe2 size={16} />} label="Frontend" values={stack.frontend} /><StackGroup icon={<Server size={16} />} label="Backend" values={stack.backend} /><StackGroup icon={<Database size={16} />} label="Persistence" values={stack.database} /><StackGroup icon={<CheckCircle2 size={16} />} label="Testing" values={stack.testing} /></>}{!stack && <EmptyState icon={<Layers3 size={18} />} title="Stack data is not available" text="The backend has not returned stack evidence for this analysis." />}</div></section><section className="panel signal-panel"><PanelHeading eyebrow="Finding signals" title="Where to focus next" action={<button className="text-button" onClick={() => onNavigate("findings")}>All findings <ArrowRight size={14} /></button>} /><div className="signal-total"><strong>{totalFindings}</strong><span>evidence-backed signals</span></div><div className="severity-bars">{severityCountKeys.map((severity) => <SeverityBar key={severity} severity={severity} count={counts[severity]} total={Math.max(totalFindings, 1)} />)}</div><div className="signal-footnote"><ShieldCheck size={14} /> Findings remain advisory; verify before changing code.</div></section></div>
     <section className="panel focus-panel"><PanelHeading eyebrow="Fast read" title="Start with the sharp edges" action={<button className="text-button" onClick={() => onNavigate("findings")}>Open findings <ArrowRight size={14} /></button>} /><div className="focus-list">{(findings?.items ?? []).filter((finding) => finding.severity === "high" || finding.severity === "critical").slice(0, 3).map((finding) => <FocusFinding finding={finding} key={finding.id} onClick={() => onNavigate("findings")} />)}{!(findings?.items ?? []).some((finding) => finding.severity === "high" || finding.severity === "critical") && <EmptyState icon={<CircleCheck size={18} />} title="No urgent findings" text="The current report has no critical or high-severity signals." />}</div></section>
