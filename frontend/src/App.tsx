@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -36,6 +36,7 @@ import {
   Route,
   Search,
   Send,
+  Settings2,
   Server,
   ShieldAlert,
   ShieldCheck,
@@ -45,7 +46,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import { api, ApiError } from "./lib/api";
+import { api, apiConfig, ApiError } from "./lib/api";
 import { demoAnalysis, demoArchitecture, demoChat, demoFindings, demoRoadmap } from "./lib/mockData";
 import type {
   AnalysisReport,
@@ -78,6 +79,7 @@ const progressStages: Array<{ id: ProgressStage; label: string; hint: string }> 
 const progressOrder = progressStages.map((stage) => stage.id);
 const severityCountKeys: (keyof SeverityCounts)[] = ["critical", "high", "medium", "low"];
 const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
+const WORKSPACE_SESSION_KEY = "reporevive.workspace.session";
 const demoSummary = demoAnalysis.summary ?? {
   files_analyzed: 0,
   analysis_duration_ms: 0,
@@ -137,6 +139,35 @@ function getErrorMessage(error: unknown) {
   return "Something went wrong while starting the analysis.";
 }
 
+function saveWorkspaceSession(analysisId: string, ownerToken: string | null) {
+  if (!ownerToken) return;
+  try {
+    sessionStorage.setItem(WORKSPACE_SESSION_KEY, JSON.stringify({ analysisId, ownerToken }));
+  } catch {
+    // Session storage can be unavailable in privacy-restricted webviews.
+  }
+}
+
+function clearWorkspaceSession() {
+  try {
+    sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
+  } catch {
+    // Session storage can be unavailable in privacy-restricted webviews.
+  }
+}
+
+function readWorkspaceSession(): { analysisId: string; ownerToken: string } | null {
+  try {
+    const raw = sessionStorage.getItem(WORKSPACE_SESSION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { analysisId?: unknown; ownerToken?: unknown };
+    if (typeof value.analysisId !== "string" || typeof value.ownerToken !== "string" || !value.analysisId || !value.ownerToken) return null;
+    return { analysisId: value.analysisId, ownerToken: value.ownerToken };
+  } catch {
+    return null;
+  }
+}
+
 function mapBackendStage(stage?: string): ProgressStage | undefined {
   if (!stage) return undefined;
   if (stage === "queued" || stage === "validating" || stage === "intake") return "validation";
@@ -167,8 +198,10 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(!demoModeEnabled);
 
   const resetWorkspace = () => {
+    clearWorkspaceSession();
     setView("overview");
     setAnalysis(null);
     setOwnerToken(null);
@@ -183,6 +216,7 @@ function App() {
   };
 
   const loadDemo = () => {
+    clearWorkspaceSession();
     setAnalysis(demoAnalysis);
     setOwnerToken(null);
     setArchitecture(demoArchitecture);
@@ -227,6 +261,45 @@ function App() {
     throw new Error("The analysis is taking longer than expected. You can retry from the analysis status page.");
   };
 
+  useEffect(() => {
+    if (demoModeEnabled) return;
+    const saved = readWorkspaceSession();
+    if (!saved) {
+      setIsRestoring(false);
+      return;
+    }
+
+    let cancelled = false;
+    const restore = async () => {
+      try {
+        const summary = await api.getAnalysis(saved.analysisId, saved.ownerToken);
+        if (cancelled) return;
+        setOwnerToken(saved.ownerToken);
+        if (summary.status === "completed") {
+          await loadAnalysisDetails(saved.analysisId, summary, saved.ownerToken);
+          return;
+        }
+        setAnalysis(summary);
+        setProgressStage(mapBackendStage(summary.stage) ?? "validation");
+        setView("progress");
+        setIsSubmitting(true);
+        await pollAnalysis(saved.analysisId, saved.ownerToken);
+      } catch {
+        if (!cancelled) {
+          clearWorkspaceSession();
+          setSubmitError("The previous workspace session could not be restored. Start a new analysis.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSubmitting(false);
+          setIsRestoring(false);
+        }
+      }
+    };
+    void restore();
+    return () => { cancelled = true; };
+  }, []);
+
   const submitAnalysis = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitError(null);
@@ -253,6 +326,7 @@ function App() {
       const start = sourceMode === "github" ? await api.startGithub(githubUrl.trim()) : await api.uploadZip(zipFile as File);
       const token = start.owner_token ?? null;
       setOwnerToken(token);
+      saveWorkspaceSession(start.analysis_id, token);
       setAnalysis(start);
       await pollAnalysis(start.analysis_id, token);
     } catch (error) {
@@ -288,6 +362,10 @@ function App() {
     setMobileNavOpen(false);
   };
 
+  if (isRestoring) {
+    return <div className="landing-shell restoring-shell"><div className="restore-card"><RefreshCw className="spin" size={20} /><strong>Restoring workspace</strong><p>Reconnecting to the previous analysis session.</p></div></div>;
+  }
+
   if (!analysis) {
     return <LandingPage githubUrl={githubUrl} setGithubUrl={setGithubUrl} sourceMode={sourceMode} setSourceMode={setSourceMode} zipFile={zipFile} onZipChange={handleZipChange} onSubmit={submitAnalysis} isSubmitting={isSubmitting} submitError={submitError} onLoadDemo={loadDemo} privacyAcknowledged={privacyAcknowledged} setPrivacyAcknowledged={setPrivacyAcknowledged} />;
   }
@@ -320,6 +398,7 @@ function App() {
         {view === "roadmap" && <RoadmapView roadmap={roadmap} findings={findings} />}
         {view === "chat" && <ChatView analysisId={analysis.analysis_id} ownerToken={ownerToken} isDemo={isDemo} />}
         {view === "report" && <ReportView analysis={analysis} architecture={architecture} findings={findings} roadmap={roadmap} report={report} />}
+        {view === "settings" && <SettingsView analysis={analysis} isDemo={isDemo} onReset={resetWorkspace} />}
       </main>
     </div>
   );
@@ -526,6 +605,43 @@ function ChatView({ analysisId, ownerToken, isDemo }: { analysisId: string; owne
     try { setAnswer(isDemo ? demoChat : await api.askQuestion(analysisId, value, ownerToken)); setQuestion(""); } catch (err) { setError(getErrorMessage(err)); } finally { setIsLoading(false); }
   };
   return <div className="workspace-page chat-page"><WorkspaceHeader eyebrow="Repository-grounded answers" title="Codebase chat" description="Ask a question and get an answer anchored to the files RepoRevive inspected." actions={<span className="confidence-note"><MessageSquareText size={14} /> Citations required</span>} /><div className="chat-layout"><section className="panel chat-panel"><div className="chat-panel-header"><div className="assistant-avatar"><OrbitSpark /></div><div><strong>RepoRevive assistant</strong><span>Grounded in inspected repository context</span></div><span className="online-indicator"><span className="status-dot" /> ready</span></div>{answer ? <div className="answer-card"><div className="answer-label"><Sparkles size={14} /> Analysis answer <span>{Math.round(answer.confidence * 100)}% confidence</span></div><p>{answer.answer}</p>{answer.insufficient_evidence && <div className="insufficient-note"><CircleAlert size={14} /> The repository did not provide enough evidence to make this claim confidently.</div>}{answer.citations.length > 0 && <div className="citation-list"><div className="citation-heading">Source citations</div>{answer.citations.map((citation, index) => <div className="citation-item" key={`${citation.file}-${index}`}><span className="citation-number">0{index + 1}</span><div><strong>{citation.file}{citation.line ? `:${citation.line}` : ""}</strong><code>{citation.excerpt}</code></div><ExternalLink size={14} /></div>)}</div>}</div> : <div className="chat-empty"><div className="chat-empty-orbit"><OrbitSpark /></div><h2>Ask the repository a question.</h2><p>Try one of the prompts below, or ask about a file, flow, risk, or next step.</p><div className="suggested-list">{suggestedQuestions.map((item) => <button onClick={() => void ask(undefined, item)} key={item}>{item}<ArrowUpRight size={14} /></button>)}</div></div>}{error && <div className="chat-error"><AlertCircle size={14} /> {error}</div>}<form className="chat-input-row" onSubmit={ask}><input aria-label="Ask a repository question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask about a file, flow, or finding..." /><button type="submit" disabled={isLoading || !question.trim()} aria-label="Send question">{isLoading ? <RefreshCw className="spin" size={17} /> : <Send size={17} />}</button></form></section><aside className="chat-aside"><div className="panel chat-guidance"><div className="panel-eyebrow">Good questions look like</div><h2>Specific, source-shaped, useful.</h2><div className="guidance-list"><Guidance icon={<FileCode2 size={15} />} text="Why is this file involved in the deployment issue?" /><Guidance icon={<GitBranch size={15} />} text="Where does the frontend call this backend route?" /><Guidance icon={<Route size={15} />} text="What should I do before I add a new feature?" /></div></div><div className="panel privacy-card"><LockKeyhole size={16} /><strong>Grounding boundary</strong><p>Answers can only use context retrieved from this analysis. When evidence is thin, the assistant says so.</p></div></aside></div></div>;
+}
+
+function SettingsView({ analysis, isDemo, onReset }: { analysis: AnalysisSummaryResponse; isDemo: boolean; onReset: () => void }) {
+  const apiOrigin = apiConfig.baseUrl;
+  const isLocal = apiOrigin.includes("localhost") || apiOrigin.includes("127.0.0.1");
+  return <div className="workspace-page settings-page">
+    <WorkspaceHeader eyebrow="Workspace controls" title="Workspace settings" description="Review this analysis session, connection target, and privacy boundary." actions={<span className="confidence-note"><Settings2 size={14} /> Session scoped</span>} />
+    <div className="settings-layout">
+      <section className="panel settings-card">
+        <div className="panel-eyebrow">Current session</div>
+        <h2>Analysis workspace</h2>
+        <div className="settings-list">
+          <SettingRow label="Repository" value={analysis.repository.name} detail={analysis.repository.source_type === "github" ? "Public GitHub repository" : "Uploaded ZIP archive"} />
+          <SettingRow label="Analysis status" value={analysis.status} detail={isDemo ? "Built-in sample data" : "Live backend result"} />
+          <SettingRow label="Analysis ID" value={analysis.analysis_id} detail="Used to scope result and assistant requests" mono />
+        </div>
+      </section>
+      <section className="panel settings-card">
+        <div className="panel-eyebrow">Service connection</div>
+        <h2>Assistant boundary</h2>
+        <div className="settings-list">
+          <SettingRow label="API endpoint" value={apiOrigin} detail={isLocal ? "Local backend; start it with npm run dev" : "Configured application service"} mono />
+          <SettingRow label="Repository code" value="Never executed" detail="RepoRevive inspects supported source files only" />
+          <SettingRow label="AI context" value="Sanitized excerpts" detail="Suspected secrets are masked before optional AI reasoning" />
+        </div>
+      </section>
+    </div>
+    <section className="panel settings-actions-card">
+      <div><div className="panel-eyebrow">Session actions</div><h2>Need a clean workspace?</h2><p>Starting another analysis clears this session from the current browser tab.</p></div>
+      <button className="primary-button" onClick={onReset}><Plus size={15} /> Analyze another repo</button>
+    </section>
+    <div className="workspace-disclaimer"><ShieldCheck size={14} /><span>The owner token is kept only in this browser session and is never shown in workspace settings.</span></div>
+  </div>;
+}
+
+function SettingRow({ label, value, detail, mono = false }: { label: string; value: string; detail: string; mono?: boolean }) {
+  return <div className="setting-row"><div><strong>{label}</strong><span>{detail}</span></div><code className={mono ? "mono" : ""}>{value}</code></div>;
 }
 
 function Guidance({ icon, text }: { icon: React.ReactNode; text: string }) {

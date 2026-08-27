@@ -13,7 +13,7 @@ import {
 import { BrandMark } from "./icons";
 import type { ReactNode } from "react";
 
-export type WorkspaceView = "overview" | "architecture" | "findings" | "roadmap" | "chat" | "report";
+export type WorkspaceView = "overview" | "architecture" | "findings" | "roadmap" | "chat" | "report" | "settings";
 
 interface SidebarProps {
   view: WorkspaceView;
@@ -70,7 +70,7 @@ export function Sidebar({ view, onNavigate, repositoryName, onReset }: SidebarPr
             <p>Findings link back to the files that support them.</p>
           </div>
         </div>
-        <button className="sidebar-nav-item sidebar-settings"><Settings2 size={17} /><span>Workspace settings</span></button>
+        <button className={`sidebar-nav-item sidebar-settings ${view === "settings" ? "active" : ""}`} onClick={() => onNavigate("settings")}><Settings2 size={17} /><span>Workspace settings</span></button>
         <button className="new-analysis-button" onClick={onReset}><span>＋</span> Analyze another repo</button>
       </div>
     </aside>

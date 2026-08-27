@@ -13,6 +13,28 @@ npm test          # unit tests
 npm run build     # production build
 ```
 
+## Android APK
+
+The Android wrapper uses Capacitor and bundles the Vite output locally. It does
+not load the hosted website inside the app. Android builds require JDK 17 and
+an installed Android SDK (`ANDROID_HOME` or `ANDROID_SDK_ROOT`).
+
+```powershell
+# Use the combined Render origin for the mobile build.
+$env:VITE_API_BASE_URL = "https://reporevive-frontend.onrender.com"
+npm run build
+npx cap sync android
+cd android
+.\gradlew.bat assembleDebug
+```
+
+The debug APK is written to
+`android/app/build/outputs/apk/debug/app-debug.apk`. The release build requires
+an owner-managed keystore; keep `keystore.properties`, passwords, and keystore
+files out of version control. Capacitor's built-in `CapacitorHttp` plugin is
+enabled in `capacitor.config.ts` so the webview can call the HTTPS API without
+requiring a backend CORS change.
+
 ### `npm run dev` — one command for both servers
 
 `npm run dev` runs [`scripts/dev.mjs`](scripts/dev.mjs), which launches the Vite
@@ -62,7 +84,8 @@ The client treats the analysis service as authoritative for live data and uses t
 ## Analysis ownership
 
 The backend returns a one-time `owner_token` when a live analysis starts. The
-frontend keeps that token in memory and automatically sends it as the
+frontend keeps that token in the current browser session and automatically sends it as the
 `X-Owner-Token` header on status, result, chat, and delete requests. Sample mode
-does not use an owner token. If the browser is refreshed, the in-memory token is
-lost and the user must start a new analysis.
+does not use an owner token. Refreshing the browser now restores the current
+analysis when the backend still has it; the token is never shown in workspace
+settings and is cleared when starting another analysis.

@@ -43,6 +43,18 @@ describe("RepoRevive client", () => {
     expect(screen.getByText("frontend/src/features/search/searchApi.ts:24")).toBeInTheDocument();
   });
 
+  it("opens workspace settings from the sidebar", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /view sample/i }));
+    await user.click(screen.getAllByRole("button", { name: /workspace settings/i })[0]);
+
+    expect(screen.getByRole("heading", { name: "Workspace settings" })).toBeInTheDocument();
+    expect(screen.getByText("Assistant boundary")).toBeInTheDocument();
+    expect(screen.getByText("The owner token is kept only in this browser session and is never shown in workspace settings.")).toBeInTheDocument();
+  });
+
   it("renders the defensive info severity", () => {
     render(<SeverityBadge severity="info" />);
 
