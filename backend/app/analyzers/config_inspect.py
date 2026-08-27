@@ -36,6 +36,12 @@ _LOCALHOST_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?")
 # A localhost URL alongside an env-var read is a dev fallback default, not a
 # hardcoded URL (e.g. `import.meta.env.VITE_API_BASE_URL ?? "http://localhost"`).
 _ENV_REF_HINT = re.compile(r"import\.meta\.env|process\.env|os\.getenv|os\.environ")
+# Comment lines (JSDoc, //, #, block) describe code — a URL there isn't config.
+_COMMENT_PREFIXES = ("//", "#", "*", "/*", "<!--", "--")
+
+
+def _is_comment_line(line: str) -> bool:
+    return line.strip().startswith(_COMMENT_PREFIXES)
 
 
 def inspect_configuration(ctx: AnalysisContext) -> list[Finding]:
@@ -136,6 +142,8 @@ def _hardcoded_url_findings(ctx: AnalysisContext) -> list[Finding]:
         if f.language not in ("javascript", "typescript", "python"):
             continue
         for line_no, line in enumerate(f.content.splitlines(), start=1):
+            if _is_comment_line(line):
+                continue  # a URL in a comment is documentation, not config
             if _LOCALHOST_RE.search(line) and not _ENV_REF_HINT.search(line):
                 hits.append((f.path, line_no, line.strip()[:120]))
                 break  # one per file is enough signal

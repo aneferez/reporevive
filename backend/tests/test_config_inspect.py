@@ -35,6 +35,31 @@ def test_hardcoded_localhost_flagged():
     assert any("Hardcoded localhost" in f.title for f in findings)
 
 
+def test_localhost_in_comment_not_flagged():
+    # A URL inside a comment (e.g. a JSDoc block) is documentation, not config.
+    ctx = make_ctx(
+        {
+            "scripts/dev.mjs": (
+                "/**\n"
+                " * defaults to http://localhost:8000 when unset.\n"
+                " */\n"
+                "const port = process.env.BACKEND_PORT || '8000';\n"
+            ),
+        }
+    )
+    findings = inspect_configuration(ctx)
+    assert not any("Hardcoded localhost" in f.title for f in findings)
+
+
+def test_localhost_env_fallback_not_flagged():
+    # A localhost used only as an env-var fallback default is intentional.
+    ctx = make_ctx(
+        {"src/api.ts": 'const base = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";\n'}
+    )
+    findings = inspect_configuration(ctx)
+    assert not any("Hardcoded localhost" in f.title for f in findings)
+
+
 def test_documented_env_produces_no_config_finding():
     ctx = make_ctx(
         {
