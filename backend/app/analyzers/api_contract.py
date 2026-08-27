@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from ..models.enums import Category, Severity, VerificationStatus
 from ..models.schemas import Finding
-from .base import make_finding
+from .base import is_fixture_path, make_finding
 from .context import AnalysisContext
 
 _METHODS = ("get", "post", "put", "delete", "patch")
@@ -139,8 +139,10 @@ def analyze_api_contract(ctx: AnalysisContext) -> ApiResult:
 def _extract_backend_routes(ctx: AnalysisContext) -> list[BackendRoute]:
     routes: list[BackendRoute] = []
 
-    # FastAPI + Flask (Python): decorator lines only.
-    py_files = ctx.find_by_language("python")
+    # FastAPI + Flask (Python): decorator lines only. Skip test/fixture/sample
+    # files so demo route strings (e.g. a sample repo embedded in a fixture)
+    # aren't treated as this project's real backend routes.
+    py_files = [f for f in ctx.find_by_language("python") if not is_fixture_path(f.path)]
     prefixes = _collect_prefixes(py_files, _PREFIX) + _collect_prefixes(py_files, _FLASK_URL_PREFIX)
     prefixes = sorted(set(prefixes))
     for f in py_files:
@@ -167,10 +169,10 @@ def _extract_backend_routes(ctx: AnalysisContext) -> list[BackendRoute]:
 
     routes.extend(_extract_django_routes(ctx))
 
-    # Express (JS/TS) — only files that actually import express.
+    # Express (JS/TS) — only files that actually import express (and not fixtures).
     js_files = [
         f for f in ctx.find_by_language("javascript", "typescript")
-        if _EXPRESS_SIGNAL.search(f.content)
+        if _EXPRESS_SIGNAL.search(f.content) and not is_fixture_path(f.path)
     ]
     mounts = _collect_prefixes(js_files, _EXPRESS_MOUNT)
     for f in js_files:
@@ -195,6 +197,10 @@ def _extract_frontend_calls(ctx: AnalysisContext) -> list[FrontendCall]:
     for f in ctx.find_by_language("javascript", "typescript"):
         # Express backend files declare routes, not client calls.
         if _EXPRESS_SIGNAL.search(f.content):
+            continue
+        # Mock/demo/fixture files (e.g. mockData.ts) hold illustrative API strings,
+        # not real calls — comparing them produces phantom "missing route" findings.
+        if is_fixture_path(f.path):
             continue
         lines = f.content.splitlines()
         for line_no, line in enumerate(lines, start=1):

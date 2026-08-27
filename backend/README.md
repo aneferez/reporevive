@@ -85,20 +85,20 @@ pytest
 
 ## Evaluation
 
-A benchmark harness runs 13 synthetic sample repositories through the real
-pipeline and checks **68 intentionally-introduced scenarios**, then reports
+A benchmark harness runs 14 synthetic sample repositories through the real
+pipeline and checks **70 intentionally-introduced scenarios**, then reports
 metrics:
 
 ```bash
 python -m evaluation.run_eval
 ```
 
-Current outcome: **68/68 (100%)**. Coverage by group:
+Current outcome: **70/70 (100%)**. Coverage by group:
 
 | Group | Checks | What it verifies |
 | --- | --- | --- |
 | `stack` | 18 | Detection of React, Vue, Vite, TypeScript, FastAPI, Flask, Django, Express/Node, Prisma, and the Postgres/MongoDB/Pytest/Vitest/Jest/Cypress signals |
-| `precision` | 8 | A healthy repo raises no false findings, and secrets in test/fixture/sample paths are down-weighted to informational (not false criticals) |
+| `precision` | 10 | A healthy repo raises no false findings; secrets in test/fixture/sample paths are informational (not criticals); and demo/mock/test files never create phantom API-mismatch or hardcoded-URL findings |
 | `findings` | 22 | API mismatches (method + missing route), config gaps, dependency conflicts, and 8 secret kinds (AWS, GitHub, Google, Slack, Stripe, private key, JWT, generic) |
 | `redaction` | 2 | Raw secret values never survive in stored content |
 | `roadmap` | 7 | Findings map to the right recovery buckets in priority order, and informational findings never create tasks (FR-10) |

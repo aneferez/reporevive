@@ -11,7 +11,7 @@ import re
 
 from ..models.enums import Category, Severity, VerificationStatus
 from ..models.schemas import Finding
-from .base import make_finding
+from .base import is_fixture_path, make_finding
 from .context import AnalysisContext
 
 # Env-var reference patterns per ecosystem.
@@ -33,6 +33,9 @@ _WELL_KNOWN = {
 _ENV_TEMPLATE_NAMES = (".env.example", ".env.sample", ".env.template", ".env.dist")
 
 _LOCALHOST_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?")
+# A localhost URL alongside an env-var read is a dev fallback default, not a
+# hardcoded URL (e.g. `import.meta.env.VITE_API_BASE_URL ?? "http://localhost"`).
+_ENV_REF_HINT = re.compile(r"import\.meta\.env|process\.env|os\.getenv|os\.environ")
 
 
 def inspect_configuration(ctx: AnalysisContext) -> list[Finding]:
@@ -41,6 +44,10 @@ def inspect_configuration(ctx: AnalysisContext) -> list[Finding]:
     referenced: dict[str, tuple[str, int]] = {}
     for pattern in _ENV_PATTERNS:
         for f in ctx.files:
+            # Env-var reads inside test/fixture/sample code describe the fixture,
+            # not this project's real configuration surface.
+            if is_fixture_path(f.path):
+                continue
             for line_no, line in enumerate(f.content.splitlines(), start=1):
                 for match in pattern.finditer(line):
                     name = match.group(1)
@@ -123,10 +130,13 @@ def _hardcoded_url_findings(ctx: AnalysisContext) -> list[Finding]:
         # Skip places where a localhost default is expected/benign.
         if base.startswith(".env") or "config" in base or base in ("readme.md", "docker-compose.yml"):
             continue
+        # Test/fixture/sample files legitimately hardcode localhost.
+        if is_fixture_path(f.path):
+            continue
         if f.language not in ("javascript", "typescript", "python"):
             continue
         for line_no, line in enumerate(f.content.splitlines(), start=1):
-            if _LOCALHOST_RE.search(line):
+            if _LOCALHOST_RE.search(line) and not _ENV_REF_HINT.search(line):
                 hits.append((f.path, line_no, line.strip()[:120]))
                 break  # one per file is enough signal
 

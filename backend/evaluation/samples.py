@@ -289,6 +289,32 @@ REPO_FIXTURE_SECRETS = {
     "README.md": _LONG_README,
 }
 
+# ---------------------------------------------------------------------------
+# 14. Mock/demo and test files that hold illustrative API strings and localhost
+#     URLs. A precise analyzer must NOT report these as real mismatches or
+#     hardcoded-URL problems. The real frontend call (api.ts -> /api/users)
+#     matches the backend, so the repo is clean.
+# ---------------------------------------------------------------------------
+REPO_FIXTURE_NOISE = {
+    "frontend/package.json": '{"dependencies":{"react":"^18","react-dom":"^18"},"devDependencies":{"vite":"^5"}}',
+    "frontend/src/api.ts": 'export const listUsers = () => fetch("/api/users");\n',
+    # Demo data with a fake broken call — must be ignored.
+    "frontend/src/mockData.ts": (
+        "export const demoFinding = { evidence: \"client.post('/api/does-not-exist')\" };\n"
+    ),
+    # A test file that legitimately hardcodes localhost — must be ignored.
+    "frontend/src/api.test.ts": 'const BASE = "http://localhost:8000";\nfetch(`${BASE}/api/users`);\n',
+    "backend/requirements.txt": "fastapi\n",
+    "backend/app/main.py": (
+        "from fastapi import FastAPI\n"
+        "app = FastAPI()\n\n"
+        '@app.get("/api/users")\n'
+        "def users():\n    return []\n"
+    ),
+    "README.md": _LONG_README,
+    "Dockerfile": "FROM python:3.12-slim\n",
+}
+
 SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "healthy_react_fastapi": REPO_HEALTHY,
     "broken_config": REPO_BROKEN_CONFIG,
@@ -303,4 +329,5 @@ SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "express_prisma": REPO_PRISMA,
     "more_secrets": REPO_MORE_SECRETS,
     "fixture_secrets": REPO_FIXTURE_SECRETS,
+    "fixture_noise": REPO_FIXTURE_NOISE,
 }

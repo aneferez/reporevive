@@ -113,3 +113,30 @@ def test_private_key_marker_line_not_flagged():
     redacted, hits = redact_text(text)
     assert all(h.kind != "private_key_block" for h in hits)
     assert redacted.strip() == text.strip()  # line kept as-is, not redacted
+
+
+def test_code_references_not_flagged_as_secrets():
+    # Ordinary source code with secret-shaped identifiers must not be flagged.
+    for line in (
+        "owner_token = new_owner_token()\n",
+        "client = genai.Client(api_key=self.settings.gemini_api_key)\n",
+        "token = _split_req_name(line)\n",
+        "record.secret_hits = intake.secret_hits\n",
+        "return { ownerToken: value.ownerToken };\n",
+        "max_output_tokens=max_output_tokens\n",
+    ):
+        _redacted, hits = redact_text(line)
+        assert hits == [], f"false positive on: {line!r} -> {[h.kind for h in hits]}"
+
+
+def test_low_entropy_word_values_not_flagged():
+    # A plain dictionary word (enum value, example placeholder) is not a secret.
+    for line in ('secret = "secret"\n', "# scheme://user:PASSWORD@host redact it\n"):
+        _redacted, hits = redact_text(line)
+        assert hits == [], f"false positive on: {line!r} -> {[h.kind for h in hits]}"
+
+
+def test_real_secret_next_to_code_still_flagged():
+    # Precision changes must not suppress genuine secrets.
+    _r, hits = redact_text('gemini_api_key = "AIzaSyA1234567890abcdefghijklmnopqrstuv"\n')
+    assert any(h.kind in ("google_api_key", "generic_secret_assignment") for h in hits)

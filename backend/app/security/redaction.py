@@ -116,6 +116,33 @@ def _looks_like_placeholder(value: str) -> bool:
     return len(set(stripped)) <= 2
 
 
+def _looks_like_low_entropy(value: str) -> bool:
+    """A short, purely-alphabetic word (e.g. ``secret``, ``PASSWORD``). Real
+    credentials carry entropy — digits, mixed case, or symbols — so a plain
+    dictionary word in a `secret = "secret"` enum or a `user:PASSWORD@host`
+    example is not a credential."""
+    v = value.strip()
+    return v.isalpha() and (v.islower() or v.isupper()) and len(v) < 16
+
+
+_DOTTED_REF = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+$")
+_SNAKE_IDENT = re.compile(r"^[A-Za-z_]+$")
+
+
+def _looks_like_code_reference(value: str) -> bool:
+    """A variable, attribute access, or call target — code, not a literal value.
+
+    Catches the common false positives from source (not .env) files, e.g.
+    ``owner_token = new_owner_token()`` or ``api_key=self.settings.gemini_api_key``,
+    without suppressing real random-looking secrets (which contain digits/symbols
+    and neither a dotted path nor an all-letter snake_case shape).
+    """
+    v = value.strip()
+    if "." in v and _DOTTED_REF.match(v):
+        return True
+    return "_" in v and bool(_SNAKE_IDENT.match(v))
+
+
 def mask_secret(value: str, kind: str) -> str:
     value = value.strip()
     if kind == "private_key_block":
@@ -169,7 +196,11 @@ def redact_text(text: str) -> tuple[str, list[SecretHit]]:
             def _replace(match: re.Match[str], _kind: str = kind) -> str:
                 group = match.groupdict().get("secret")
                 secret = group if group is not None else match.group(0)
-                if _looks_like_placeholder(secret):
+                if _looks_like_placeholder(secret) or _looks_like_low_entropy(secret):
+                    return match.group(0)
+                # Unquoted env-style assignments must be real values, not source
+                # code (variables, attribute access, function results).
+                if _kind == "env_secret_assignment" and _looks_like_code_reference(secret):
                     return match.group(0)
                 hits.append(
                     SecretHit(

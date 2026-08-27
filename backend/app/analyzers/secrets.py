@@ -10,7 +10,7 @@ from __future__ import annotations
 from ..models.enums import Category, Severity, VerificationStatus
 from ..models.schemas import Finding
 from ..security.redaction import SecretHit
-from .base import make_finding
+from .base import is_fixture_path, make_finding
 
 _KIND_LABELS = {
     "aws_access_key_id": "AWS access key id",
@@ -32,34 +32,9 @@ _HIGH_SIGNAL = {
     "private_key_block",
 }
 
-# Path segments and filename shapes whose "secrets" are almost always intentional
-# test data (fixtures, samples, examples) rather than real exposures. Findings in
-# these locations are down-weighted to informational so they don't dominate the
-# report — critically, this stops a security tool's own test fixtures (or any repo
-# with example credentials) from producing false "critical secret" findings.
-_FIXTURE_DIRS = frozenset({
-    "test", "tests", "__tests__", "__mocks__", "testdata", "fixtures", "fixture",
-    "evaluation", "evaluations", "samples", "sample", "examples", "example",
-    "mocks", "e2e", "stories",
-})
-
-
-def _is_fixture_path(path: str | None) -> bool:
-    """True when a path looks like test / fixture / sample / example code."""
-    if not path:
-        return False
-    norm = path.replace("\\", "/").lower()
-    segments = norm.split("/")
-    if any(seg in _FIXTURE_DIRS for seg in segments):
-        return True
-    name = segments[-1]
-    if name.startswith(("test_", "conftest", "mock")):
-        return True
-    return name.endswith((
-        "_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx",
-        ".spec.ts", ".spec.tsx", ".spec.js",
-        ".example", ".sample", ".template",
-    ))
+# Secrets in test / fixture / sample / example paths are down-weighted to
+# informational (see is_fixture_path in base) so a security tool's own fixtures —
+# or any repo with example credentials — don't produce false "critical" findings.
 
 
 def secret_findings(hits: list[SecretHit]) -> list[Finding]:
@@ -95,7 +70,7 @@ def secret_findings(hits: list[SecretHit]) -> list[Finding]:
             "load it from an environment variable or secret manager instead."
         )
 
-        if _is_fixture_path(hit.file):
+        if is_fixture_path(hit.file):
             # Almost certainly intentional test data — keep it visible but out of
             # the severity bars, readiness, and roadmap.
             severity = Severity.info

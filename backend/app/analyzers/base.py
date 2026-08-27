@@ -13,6 +13,35 @@ SEVERITY_ORDER = {
     Severity.info: 4,
 }
 
+# Path segments and filename shapes that indicate test / fixture / sample / mock
+# / example code. Findings from these paths are almost always about intentional
+# test data (fake secrets, demo API calls) rather than the real application, so
+# analyzers treat them as low-signal to keep the report trustworthy.
+_FIXTURE_DIRS = frozenset({
+    "test", "tests", "__tests__", "__mocks__", "testdata", "fixtures", "fixture",
+    "evaluation", "evaluations", "samples", "sample", "examples", "example",
+    "mocks", "e2e", "stories", "demo", "demos",
+})
+
+
+def is_fixture_path(path: str | None) -> bool:
+    """True when a path looks like test / fixture / sample / mock / example code."""
+    if not path:
+        return False
+    norm = path.replace("\\", "/").lower()
+    segments = norm.split("/")
+    if any(seg in _FIXTURE_DIRS for seg in segments):
+        return True
+    name = segments[-1]
+    if name.startswith(("test_", "conftest", "mock")) or "mockdata" in name:
+        return True
+    return name.endswith((
+        "_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx",
+        ".spec.ts", ".spec.tsx", ".spec.js",
+        ".stories.ts", ".stories.tsx",
+        ".example", ".sample", ".template",
+    ))
+
 
 def make_finding(
     *,

@@ -206,6 +206,12 @@ def evaluate() -> EvalReport:
     r.append(ScenarioResult("roadmap-real-secret", "roadmap", "Roadmap secret task built from the real secret", _roadmap_has(fx, "Remove and rotate exposed secrets", priority="high")))
     r.append(ScenarioResult("roadmap-omits-info", "roadmap", "Informational findings are excluded from the roadmap", bool(_info_ids) and _info_ids.isdisjoint(_road_ids)))
 
+    # Mock/demo/test files must not create phantom API-mismatch or hardcoded-URL
+    # findings (the real api.ts call matches the backend).
+    noise = records["fixture_noise"]
+    r.append(ScenarioResult("fp-mock-api-ignored", "precision", "Demo/mock API strings don't create mismatches", not _has_finding(noise, category="api_mismatch")))
+    r.append(ScenarioResult("fp-test-localhost-ignored", "precision", "localhost in a test file isn't a hardcoded-URL finding", not _has_finding(noise, title_sub="Hardcoded localhost")))
+
     # --- Recovery roadmap (FR-10) -----------------------------------------
     r.append(ScenarioResult("roadmap-secrets-security", "roadmap", "Secrets -> high-priority security task", _roadmap_has(sec, "Remove and rotate exposed secrets", priority="high")))
     r.append(ScenarioResult("roadmap-api-blockers", "roadmap", "API mismatch -> blocker task", _roadmap_has(api, "Resolve API contract mismatches")))
