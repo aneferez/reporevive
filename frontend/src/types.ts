@@ -1,6 +1,6 @@
 export type AnalysisStatus = "queued" | "running" | "completed" | "failed";
 export type SourceType = "github" | "zip";
-export type Severity = "critical" | "high" | "medium" | "low";
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
 export type FindingCategory =
   | "api_mismatch"
   | "configuration"
@@ -136,11 +136,18 @@ export interface ChatResponse {
 }
 
 export interface AnalysisReport {
-  analysis?: AnalysisSummaryResponse;
-  architecture?: ArchitectureResponse;
-  findings?: FindingsResponse;
-  roadmap?: RoadmapResponse;
-  limitations?: string[];
+  analysis_id: string;
+  status: AnalysisStatus;
+  repository: RepositoryIdentity;
+  overview: string;
+  readiness_label: string;
+  stack: StackSummary;
+  summary: AnalysisSummary;
+  architecture: ArchitectureResponse;
+  findings: FindingsResponse;
+  roadmap: RoadmapResponse;
+  limitations: string[];
+  generated_at: string;
 }
 
 export interface AnalysisStartResponse {

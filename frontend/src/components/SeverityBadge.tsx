@@ -6,6 +6,7 @@ const labels: Record<Severity, string> = {
   high: "High",
   medium: "Medium",
   low: "Low",
+  info: "Info",
 };
 
 const icons = {
@@ -13,6 +14,7 @@ const icons = {
   high: AlertTriangle,
   medium: Info,
   low: CircleCheck,
+  info: Info,
 };
 
 export function SeverityBadge({ severity }: { severity: Severity }) {

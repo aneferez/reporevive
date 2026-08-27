@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "./App";
+import { SeverityBadge } from "./components/SeverityBadge";
 
 describe("RepoRevive client", () => {
   it("validates repository intake before contacting the API", async () => {
@@ -40,5 +41,11 @@ describe("RepoRevive client", () => {
     expect(screen.getByText("Repository-grounded answers")).toBeInTheDocument();
     expect(screen.getByText(/The job search flow appears incomplete/)).toBeInTheDocument();
     expect(screen.getByText("frontend/src/features/search/searchApi.ts:24")).toBeInTheDocument();
+  });
+
+  it("renders the defensive info severity", () => {
+    render(<SeverityBadge severity="info" />);
+
+    expect(screen.getByText("Info")).toHaveClass("severity-info");
   });
 });
