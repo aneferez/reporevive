@@ -4,12 +4,15 @@ export type Severity = "critical" | "high" | "medium" | "low";
 export type FindingCategory =
   | "api_mismatch"
   | "configuration"
-  | "security"
+  | "secret"
   | "testing"
   | "documentation"
   | "dependency"
   | "deployment"
-  | "other";
+  | "stack"
+  | "architecture"
+  // Tolerate future backend categories without a type break.
+  | (string & {});
 
 export interface RepositoryIdentity {
   name: string;
@@ -67,7 +70,7 @@ export interface Finding {
   description: string;
   file?: string;
   line?: number;
-  evidence: string;
+  evidence?: string | null;
   confidence: number;
   recommendation: string;
   verification_status: "evidence_backed" | "inferred" | "unknown" | string;
@@ -96,7 +99,7 @@ export interface ArchitectureComponent {
 export interface ArchitectureConnection {
   source: string;
   target: string;
-  label: string;
+  label?: string | null;
   evidence_files: string[];
 }
 
@@ -112,7 +115,7 @@ export interface RoadmapTask {
   description: string;
   related_finding_ids: string[];
   related_files: string[];
-  estimated_complexity: "small" | "medium" | "large" | string;
+  estimated_complexity: "low" | "medium" | "high" | (string & {});
 }
 
 export interface RoadmapResponse {
