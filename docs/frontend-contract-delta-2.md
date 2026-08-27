@@ -10,13 +10,18 @@ edits) and are your call to make.
 
 ---
 
+> **Status: ✅ both items applied** by the frontend owner in commit `cf46a7d`
+> (Severity `info` with all touchpoints + an `info` filter option and CSS
+> variant; flat `AnalysisReport` with `demoReport`/`ReportView` updated).
+> Typecheck, tests, and build pass. This note is kept as a record of the change.
+
 ## Context
 
 The backend applied the three safe, no-ripple type fixes directly (commit
 `cb51d2c`): `FindingCategory` accuracy, `estimated_complexity` values, and
 nullable `evidence` / connection `label`. The two items below were intentionally
-left for you — each one touches rendering logic or demo data, so a blind type
-edit breaks `tsc -b`.
+left for the frontend owner — each one touches rendering logic or demo data, so a
+blind type edit breaks `tsc -b`.
 
 Neither is required for the app to work today; both are correctness/robustness
 improvements. Do them when convenient.
