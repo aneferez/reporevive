@@ -85,23 +85,23 @@ pytest
 
 ## Evaluation
 
-A benchmark harness runs 12 synthetic sample repositories through the real
-pipeline and checks **63 intentionally-introduced scenarios**, then reports
+A benchmark harness runs 13 synthetic sample repositories through the real
+pipeline and checks **68 intentionally-introduced scenarios**, then reports
 metrics:
 
 ```bash
 python -m evaluation.run_eval
 ```
 
-Current outcome: **63/63 (100%)**. Coverage by group:
+Current outcome: **68/68 (100%)**. Coverage by group:
 
 | Group | Checks | What it verifies |
 | --- | --- | --- |
 | `stack` | 18 | Detection of React, Vue, Vite, TypeScript, FastAPI, Flask, Django, Express/Node, Prisma, and the Postgres/MongoDB/Pytest/Vitest/Jest/Cypress signals |
-| `precision` | 6 | A healthy/fully-configured repo raises no false test/docs/deploy/config/secret findings |
-| `findings` | 21 | API mismatches (method + missing route), config gaps, dependency conflicts, and 8 secret kinds (AWS, GitHub, Google, Slack, Stripe, private key, JWT, generic) |
+| `precision` | 8 | A healthy repo raises no false findings, and secrets in test/fixture/sample paths are down-weighted to informational (not false criticals) |
+| `findings` | 22 | API mismatches (method + missing route), config gaps, dependency conflicts, and 8 secret kinds (AWS, GitHub, Google, Slack, Stripe, private key, JWT, generic) |
 | `redaction` | 2 | Raw secret values never survive in stored content |
-| `roadmap` | 5 | Findings map to the right recovery buckets, in priority order (FR-10) |
+| `roadmap` | 7 | Findings map to the right recovery buckets in priority order, and informational findings never create tasks (FR-10) |
 | `architecture` | 5 | Component/connection graph with the PRD `persistence` taxonomy and no phantom nodes (FR-04) |
 | `intake` | 3 | Unsupported URLs, oversized archives, and path traversal are rejected |
 | `chat` | 3 | Insufficient-evidence honesty, structured AI-failure errors, and cited answers on the offline path (FR-11) |

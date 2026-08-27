@@ -30,3 +30,26 @@ def test_secret_findings_deduplicated():
     hit = SecretHit(kind="github_token", line=3, masked_evidence="ghp_… (redacted)", file="a.py")
     findings = secret_findings([hit, hit])
     assert len(findings) == 1
+
+
+def test_secret_findings_downweighted_in_fixture_paths():
+    hits = [
+        # Production path keeps its real severity.
+        SecretHit(kind="aws_access_key_id", line=1, masked_evidence="AKIA… (redacted, 20 chars)", file="backend/config.py"),
+        # Test / evaluation / mock / example paths -> informational.
+        SecretHit(kind="aws_access_key_id", line=1, masked_evidence="AKIA… (redacted, 20 chars)", file="backend/tests/test_x.py"),
+        SecretHit(kind="private_key_block", line=1, masked_evidence="-----BEGIN PRIVATE KEY----- (redacted)", file="backend/evaluation/samples.py"),
+        SecretHit(kind="github_token", line=2, masked_evidence="ghp_… (redacted)", file="frontend/src/mockData.ts"),
+        SecretHit(kind="stripe_secret_key", line=3, masked_evidence="sk_l… (redacted)", file=".env.example"),
+    ]
+    by_file = {f.file: f for f in secret_findings(hits)}
+
+    assert by_file["backend/config.py"].severity.value == "high"
+    for path in (
+        "backend/tests/test_x.py",
+        "backend/evaluation/samples.py",
+        "frontend/src/mockData.ts",
+        ".env.example",
+    ):
+        assert by_file[path].severity.value == "info", path
+        assert by_file[path].confidence < 0.5, path

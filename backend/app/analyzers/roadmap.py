@@ -71,7 +71,11 @@ def build_roadmap(findings: list[Finding]) -> list[RoadmapItem]:
     counter = 1
 
     for key, title, categories, description, complexity in _BUCKETS:
-        matched = [f for f in findings if f.category in categories]
+        # Informational findings (e.g. secrets in test/fixture paths) are not
+        # action items, so they never create or inflate a roadmap task.
+        matched = [
+            f for f in findings if f.category in categories and f.severity != Severity.info
+        ]
         if not matched:
             continue
 

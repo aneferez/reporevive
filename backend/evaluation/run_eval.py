@@ -194,6 +194,18 @@ def evaluate() -> EvalReport:
     more_clean = _redaction_clean_of(more, REPO_MORE_SECRETS_RAW)
     r.append(ScenarioResult("sec-redaction-more", "redaction", "Stripe/Slack/Google/JWT removed from stored content", more_clean[0], more_clean[1]))
 
+    # Fixture-path secrets are down-weighted so a security tool's own test data
+    # (or any repo with example credentials) doesn't produce false criticals.
+    fx = records["fixture_secrets"]
+    fx_secret = [f for f in fx.findings if f.category == "secret"]
+    r.append(ScenarioResult("sec-prod-high", "findings", "Real-path secret stays high-signal", any(f.severity.value == "high" for f in fx_secret)))
+    r.append(ScenarioResult("sec-fixture-info", "precision", "Fixture-path secret down-weighted to info", any(f.severity.value == "info" for f in fx_secret)))
+    r.append(ScenarioResult("sec-fixture-not-critical", "precision", "Fixture-path secret is NOT critical/high", not any(f.file and "test" in f.file and f.severity.value in ("critical", "high") for f in fx_secret)))
+    _info_ids = {f.id for f in fx.findings if f.severity.value == "info"}
+    _road_ids = {fid for t in fx.roadmap for fid in t.related_finding_ids}
+    r.append(ScenarioResult("roadmap-real-secret", "roadmap", "Roadmap secret task built from the real secret", _roadmap_has(fx, "Remove and rotate exposed secrets", priority="high")))
+    r.append(ScenarioResult("roadmap-omits-info", "roadmap", "Informational findings are excluded from the roadmap", bool(_info_ids) and _info_ids.isdisjoint(_road_ids)))
+
     # --- Recovery roadmap (FR-10) -----------------------------------------
     r.append(ScenarioResult("roadmap-secrets-security", "roadmap", "Secrets -> high-priority security task", _roadmap_has(sec, "Remove and rotate exposed secrets", priority="high")))
     r.append(ScenarioResult("roadmap-api-blockers", "roadmap", "API mismatch -> blocker task", _roadmap_has(api, "Resolve API contract mismatches")))

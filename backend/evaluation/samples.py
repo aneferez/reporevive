@@ -277,6 +277,18 @@ REPO_MORE_SECRETS = {
 # Raw secret strings from REPO_MORE_SECRETS that must NOT survive in stored content.
 REPO_MORE_SECRETS_RAW = [_FAKE_STRIPE, _FAKE_SLACK, _FAKE_GOOGLE, _FAKE_JWT]
 
+# ---------------------------------------------------------------------------
+# 13. The same fake secret in a production path AND a test/fixture path.
+#     Verifies real-path secrets stay high-signal while fixture-path secrets are
+#     down-weighted to informational (so a security tool's own test data doesn't
+#     produce false "critical secret" findings).
+# ---------------------------------------------------------------------------
+REPO_FIXTURE_SECRETS = {
+    "backend/config.py": 'AWS_KEY = "AKIA1234567890ABCDEF"\n',  # prod -> high
+    "backend/tests/test_creds.py": 'FAKE_AWS = "AKIAZZZZ0000ZZZZ1111"\n',  # fixture -> info
+    "README.md": _LONG_README,
+}
+
 SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "healthy_react_fastapi": REPO_HEALTHY,
     "broken_config": REPO_BROKEN_CONFIG,
@@ -290,4 +302,5 @@ SAMPLE_REPOS: dict[str, dict[str, str]] = {
     "vue_vite": REPO_VUE,
     "express_prisma": REPO_PRISMA,
     "more_secrets": REPO_MORE_SECRETS,
+    "fixture_secrets": REPO_FIXTURE_SECRETS,
 }
