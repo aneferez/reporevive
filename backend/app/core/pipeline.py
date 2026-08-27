@@ -121,7 +121,14 @@ def _run_stages(record: AnalysisRecord, settings: Settings) -> None:
     findings = []
 
     _advance(record, Stage.stack, 45)
-    stack_result = detect_stack(ctx)
+    # Detect the stack from the project's own files, not test/fixture/sample code,
+    # so a framework import that only appears inside a fixture (a sample repo, a
+    # test) does not get counted as part of this project's real stack.
+    from ..analyzers.base import is_fixture_path
+
+    real_files = [f for f in record.files if not is_fixture_path(f.path)]
+    stack_ctx = ctx if len(real_files) == len(record.files) else AnalysisContext.build(real_files)
+    stack_result = detect_stack(stack_ctx)
     record.stack = stack_result.stack
     findings.extend(stack_result.findings)
 

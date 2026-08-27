@@ -304,6 +304,8 @@ REPO_FIXTURE_NOISE = {
     ),
     # A test file that legitimately hardcodes localhost — must be ignored.
     "frontend/src/api.test.ts": 'const BASE = "http://localhost:8000";\nfetch(`${BASE}/api/users`);\n',
+    # A framework import inside a fixture must NOT pollute the detected stack.
+    "backend/tests/test_legacy.py": "from flask import Flask\napp = Flask(__name__)\n",
     "backend/requirements.txt": "fastapi\n",
     "backend/app/main.py": (
         "from fastapi import FastAPI\n"

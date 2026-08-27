@@ -211,6 +211,7 @@ def evaluate() -> EvalReport:
     noise = records["fixture_noise"]
     r.append(ScenarioResult("fp-mock-api-ignored", "precision", "Demo/mock API strings don't create mismatches", not _has_finding(noise, category="api_mismatch")))
     r.append(ScenarioResult("fp-test-localhost-ignored", "precision", "localhost in a test file isn't a hardcoded-URL finding", not _has_finding(noise, title_sub="Hardcoded localhost")))
+    r.append(ScenarioResult("stack-ignores-fixture-flask", "precision", "Framework import in a fixture doesn't pollute the stack", "Flask" not in noise.stack.backend))
 
     # --- Recovery roadmap (FR-10) -----------------------------------------
     r.append(ScenarioResult("roadmap-secrets-security", "roadmap", "Secrets -> high-priority security task", _roadmap_has(sec, "Remove and rotate exposed secrets", priority="high")))
